@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcstastox"
+description = "Tool to read McStas NeXus data and export contained information"
+readme = "README.md"
+authors = [{name = "Mads Bertelsen"}]
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.8"
+dependencies = [
+    "h5py",
+    "numpy",
+]
+
+[project.optional-dependencies]
+scipp = [
+    "scipp",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
