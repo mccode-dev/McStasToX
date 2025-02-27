@@ -18,6 +18,13 @@ To run the demo notebook one will need
 - scipp
 - scippneutron
 
+## Install
+An early version of the package is on pip, but the API is not stable yet.
+
+```
+pip install mcstastox
+```
+
 ## Basic use
 
 To for example export to scipp, one needs to specify which component is the source and which is the sample.
