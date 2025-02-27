@@ -342,6 +342,54 @@ class McStasNeXus:
 
         return np.asarray(info_entry["events"])
 
+    def get_component_parameter_entry(self, component_name):
+        component_entry  = self.get_component_entry(component_name)
+
+        if "parameters" not in component_entry.keys():
+            raise ValueError(f"The component '{component_name}' does not have a parameter entry")
+
+        return component_entry["parameters"]
+
+    def get_component_parameter_names(self, component_name):
+        parameter_entry = self.get_component_parameter_entry(component_name)
+
+        return list(parameter_entry.keys())
+
+    def get_component_parameters(self, component_name):
+
+        par_entry = self.get_component_parameter_entry(component_name)
+
+        par_dict = {}
+        par_names = self.get_component_parameter_names(component_name)
+
+        for par_name in par_names:
+            par_dict[par_name] = {}
+            this_par_entry = par_entry[par_name]
+
+            if "type" in this_par_entry.attrs:
+                par_type = this_par_entry.attrs["type"].decode("utf-8")
+                par_dict[par_name]["type"] = par_type
+
+            if "value" in this_par_entry.attrs:
+                value = this_par_entry.attrs["value"].decode("utf-8")
+                try:
+                    value = float(value)
+                except:
+                    pass
+
+                par_dict[par_name]["value"] = value
+
+            if "default" in this_par_entry.attrs:
+                default = this_par_entry.attrs["default"].decode("utf-8")
+                try:
+                    default = float(default)
+                except:
+                    pass
+
+                par_dict[par_name]["default"] = default
+
+        return par_dict
+
     def get_component_variables(self, component_name):
 
         info_entry = self.get_info_entry(component_name)
