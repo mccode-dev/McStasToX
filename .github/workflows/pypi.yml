@@ -20,4 +20,4 @@ jobs:
           python3 -mbuild
 
       - name: Upload distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.3
+        uses: pypa/gh-action-pypi-publish@v1.12.4
