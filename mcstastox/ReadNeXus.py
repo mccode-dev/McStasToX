@@ -102,7 +102,10 @@ class McStasNeXus:
         components_with_ids = []
         for comp in self.get_components_with_data():
             output_entry = self.get_output_entry(comp)
-            if "BINS" in output_entry:
+            output_contents = list(output_entry.keys())
+
+            if "BINS" in output_entry and len(output_contents) > 1:
+                # Need both BINS entry and data output to have data
                 components_with_ids.append(comp)
 
         return list(components_with_ids)
@@ -129,7 +132,7 @@ class McStasNeXus:
             raise ValueError("The version of McStas used to write this NeXus file did not embed monitor_nD geometry info")
 
         if "Geometry" not in list(component_entry.keys()):
-            raise ValueError("This component does not have geometry data.")
+            raise ValueError(f"'{component_name}' does not have geometry data.")
 
         return component_entry["Geometry"]
 
@@ -137,7 +140,7 @@ class McStasNeXus:
         component_entry = self.get_component_entry(component_name)
 
         if "output" not in list(component_entry.keys()):
-            raise ValueError("This component does not have data.")
+            raise ValueError(f"'{component_name}' does not have data.")
 
         return component_entry["output"]
 
@@ -161,7 +164,7 @@ class McStasNeXus:
         x_name = re.sub(r'[^a-zA-Z]', '_', xlabel)
 
         if x_name not in bins_entry:
-            raise ValueError(f"Expected to find {x_name} in BINS entry")
+            raise ValueError(f"Expected to find {x_name} in BINS entry of component '{component_name}'")
 
         x_axis = np.asarray(bins_entry[x_name])
 
@@ -178,7 +181,7 @@ class McStasNeXus:
         y_name = re.sub(r'[^a-zA-Z]', '_', ylabel)
 
         if y_name not in bins_entry:
-            raise ValueError(f"Exected to find {y_name} in BINS entry")
+            raise ValueError(f"Exected to find {y_name} in BINS entry of component '{component_name}'")
 
         y_axis = np.asarray(bins_entry[y_name])
 
@@ -195,7 +198,7 @@ class McStasNeXus:
         z_name = re.sub(r'[^a-zA-Z]', '_', zlabel)
 
         if z_name not in bins_entry:
-            raise ValueError(f"Exected to find {z_name} in BINS entry")
+            raise ValueError(f"Exected to find {z_name} in BINS entry of component '{component_name}'")
 
         z_axis = np.asarray(bins_entry[z_name])
 
@@ -283,7 +286,7 @@ class McStasNeXus:
                 if xvar.strip() == "x" and yvar.strip() == "y":
 
                     if "xylimits" not in info_entry.attrs:
-                        raise ValueError("xylimits exected in NeXus entry for this component")
+                        raise ValueError(f"xylimits exected in NeXus entry for component '{component_name}'")
 
                     xylimits = info_entry.attrs["xylimits"].decode("utf-8")
                     # Matches floats and integers, including negative and positive numbers
@@ -298,7 +301,7 @@ class McStasNeXus:
                                 xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
 
                 else:
-                    raise ValueError(f"Can't find sufficient info for geometry in component {component_name}")
+                    raise ValueError(f"Can't find sufficient info for geometry in component '{component_name}'")
 
             else:
                 raise ValueError("Did not find sufficient information to read geometry, recreate file with newer McStas version")
@@ -329,7 +332,7 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "events" not in info_entry.keys():
-            raise ValueError("This component does not have events entry.")
+            raise ValueError(f"The component '{component_name}' does not have events entry.")
 
         return info_entry["events"].shape[0]
 
@@ -338,7 +341,7 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "events" not in info_entry.keys():
-            raise ValueError("This component does not have events entry.")
+            raise ValueError(f"The component '{component_name}' does not have events entry.")
 
         return np.asarray(info_entry["events"])
 
@@ -395,7 +398,7 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "variables" not in info_entry.attrs:
-            raise ValueError("This component does not have variables attribute in info entry.")
+            raise ValueError(f"The component '{component_name}' does not have variables attribute in info entry.")
 
         return info_entry.attrs["variables"].decode("utf-8")
 

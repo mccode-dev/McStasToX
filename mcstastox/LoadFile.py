@@ -358,3 +358,67 @@ class Data:
 
         return events
 
+
+    def export_scipp(self, source_name, sample_name, component_name=None,
+                     filter_zeros=True, extra_variables=None):
+        try:
+            import scipp as sc
+        except:
+            raise ImportError("Scipp installation required to export to Scipp format")
+
+        # Get the full pixel id range from nexus file
+        # Make as generator to work in chunks
+
+        variables = ["p", "t", "id"]
+        if extra_variables is not None:
+            if not isinstance(extra_variables, list):
+                extra_variables = [extra_variables]
+            # Default is to gather weight, time and id
+            variables += extra_variables
+
+        event_data = self.get_event_data(variables=variables, component_name=component_name,
+                                         filter_zeros=filter_zeros)
+
+        # Retrieve coordinates corresponding to id's
+        global_coordinates = self.get_id_to_global_coordinates(component_name=component_name)
+        #global_pos = global_coordinates[event_data["id"].astype(int), :]
+
+        source_pos = self.get_global_component_coordinates(source_name)
+        sample_pos = self.get_global_component_coordinates(sample_name)
+
+        events = sc.DataArray(
+            data=sc.array(dims=['events'], unit=sc.units.counts, values=event_data["p"]),
+            coords={
+                'pixel_id': sc.array(dims=['events'], values=event_data["id"].astype(int)),
+                't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
+                'source_position': sc.vector(source_pos, unit='m'),
+                'sample_position': sc.vector(sample_pos, unit='m'),
+            })
+
+        id_object = sc.vectors(dims=['pixel_id'], values=global_coordinates, unit='m')
+
+        lowest_id_comp = self.component_pixel_order[0]
+        lowest_id = self.pixel_range[lowest_id_comp][0]
+        highest_id_comp = self.component_pixel_order[-1]
+        highest_id = self.pixel_range[highest_id_comp][-1]
+        #id_range = sc.vector(dims=['pixel_id'], values=[lowest_id, highest_id])
+
+        id_matrix = []
+        names = []
+        for comp in self.component_pixel_order:
+            id_matrix.append(self.pixel_range[comp])
+            names.append(comp)
+
+        comp_id_range = sc.array(dims=['panel_id', 'pixel'], values=id_matrix)
+        bank_names = sc.array(dims=['panel_id'], values=names)
+
+        output_object = sc.DataGroup(events=events, positions=id_object,
+                                     bank_ids=comp_id_range,
+                                     bank_names=bank_names)
+
+        output_object["events"] = sc.group(output_object["events"], "pixel_id")
+        output_object["events"].coords["position"] = sc.vectors(dims=["pixel_id"],
+                                                                values=output_object["positions"].values[output_object["events"].coords["pixel_id"].values, :],
+                                                                unit="m")
+
+        return output_object
