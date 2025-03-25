@@ -26,7 +26,6 @@ pip install mcstastox
 ```
 
 ## Basic use
-
 To for example export to scipp, one needs to specify which component is the source and which is the sample.
 
 Then all monitors with pixel id's are loaded, this is purely supported by Monitor_nD with option stings such as:
@@ -36,12 +35,21 @@ square x bins=512 y bins=256, neutron pixel min=0 t, list all neutrons
 square x bins=1024 y bins=512, neutron pixel min=131073 t, list all neutrons
 ```
 
-The next pixel min should be large enough to accomodate all pixels of the previous monitors, so here above 512*256.
+The next pixel min should be large enough to accommodate all pixels of the previous monitors, so here above 512*256.
 
-This data can then be loaded with:
+This data can then be loaded to a simple scipp object with:
 
 ```
 import mcstastox
 with mcstastox.Read(file_path) as loaded_data:
     scipp_data = loaded_data.export_scipp_simple(source_name="source", sample_name="sample_position")
 ```
+
+This data can also  be loaded to a scipp data group with:
+```
+import mcstastox
+with mcstastox.Read(file_path) as loaded_data:
+    scipp_data_group = loaded_data.export_scipp(source_name="source", sample_name="sample_position")
+```
+
+This takes less space and events are already grouped by pixel ids

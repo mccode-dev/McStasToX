@@ -3,8 +3,9 @@ import os
 import numpy as np
 import re
 
-defaults = dict(component_numbers=None, #
-                nd_geometry_info=False, #
+# All settings should have a default
+defaults = dict(component_numbers=None, # number of digits in component numbers in file
+                nd_geometry_info=False, # True when geometry info included
                 )
 
 # Version settings, ordered from newest to oldest
@@ -14,8 +15,10 @@ mcstas_version_settings = {
 }
 
 class McStasNeXus:
+    """
+    Reads a McStas NeXus files and provides methods to retrieve data or entries
+    """
     def __init__(self, file_handle):
-
         self.file_handle = file_handle
         f = self.file_handle
 
@@ -86,9 +89,15 @@ class McStasNeXus:
         # Can have other methods here for older / newer formats
 
     def get_components(self):
+        """
+        :return: list of component names
+        """
         return list(self.component_names)
 
     def get_components_with_data(self):
+        """
+        :return: list of component names that have data
+        """
         components_with_data = []
 
         for comp in self.component_names:
@@ -99,6 +108,9 @@ class McStasNeXus:
         return list(components_with_data)
 
     def get_components_with_ids(self):
+        """
+        :return: list of component names that have pixel id's
+        """
         components_with_ids = []
         for comp in self.get_components_with_data():
             output_entry = self.get_output_entry(comp)
@@ -111,6 +123,9 @@ class McStasNeXus:
         return list(components_with_ids)
 
     def get_components_with_geometry(self):
+        """
+        :return: list of component names that has geometry info
+        """
         components_with_geometry = []
         for comp in self.get_components_with_data():
             comp_entry = self.get_component_entry(comp)
@@ -118,7 +133,11 @@ class McStasNeXus:
                 components_with_geometry.append(comp)
 
         return list(components_with_geometry)
+
     def get_component_entry(self, component_name):
+        """
+        :return: the component entry of the specified component
+        """
         if component_name not in self.component_path_names:
             raise ValueError(f"No component with name '{component_name}' found in file.")
 
@@ -126,6 +145,9 @@ class McStasNeXus:
         return self.file_handle["entry1"]["instrument"]["components"][component_name]
 
     def get_geometry_entry(self, component_name):
+        """
+        :return: the geometry entry of the specified component
+        """
         component_entry = self.get_component_entry(component_name)
 
         if not self.settings["nd_geometry_info"]:
@@ -137,6 +159,9 @@ class McStasNeXus:
         return component_entry["Geometry"]
 
     def get_output_entry(self, component_name):
+        """
+        :return: the output entry of the specified component
+        """
         component_entry = self.get_component_entry(component_name)
 
         if "output" not in list(component_entry.keys()):
@@ -145,6 +170,9 @@ class McStasNeXus:
         return component_entry["output"]
 
     def get_BINS_entry(self, component_name):
+        """
+        :return: the BINS entry of the specified component
+        """
         output_entry = self.get_output_entry(component_name)
 
         if "BINS" not in output_entry.keys():
@@ -152,59 +180,57 @@ class McStasNeXus:
 
         return output_entry["BINS"]
 
-    def get_x_var_and_axis(self, component_name):
+    def get_var_and_axis(self, component_name, var, label):
+        """
+        :param component_name: str:  string with component name
+        :param var: str:  variable name, for example "xvar"
+        :param label: str: label name, for example "xlabel"
+        :return: tuple with loaded variable, axis
+        """
         bins_entry = self.get_BINS_entry(component_name)
 
-        if "xvar" not in bins_entry.attrs:
+        if var not in bins_entry.attrs:
             return None, None
 
-        xvar = bins_entry.attrs["xvar"].decode("utf-8")
-        xlabel = bins_entry.attrs["xlabel"].decode("utf-8")
+        loaded_var = bins_entry.attrs[var].decode("utf-8")
+        loaded_label = bins_entry.attrs[label].decode("utf-8")
         # Replace special characters with underscore
-        x_name = re.sub(r'[^a-zA-Z]', '_', xlabel)
+        name = re.sub(r'[^a-zA-Z]', '_', loaded_label)
 
-        if x_name not in bins_entry:
-            raise ValueError(f"Expected to find {x_name} in BINS entry of component '{component_name}'")
+        if name not in bins_entry:
+            raise ValueError(f"Expected to find {name} in BINS entry of component '{component_name}'")
 
-        x_axis = np.asarray(bins_entry[x_name])
+        axis = np.asarray(bins_entry[name])
 
-        return xvar, x_axis
+        return loaded_var, axis
+
+    def get_x_var_and_axis(self, component_name):
+        """
+        :return: tuple with loaded x variable, x axis for given component name
+        """
+        return self.get_var_and_axis(component_name=component_name, var="xvar", label="xlabel")
 
     def get_y_var_and_axis(self, component_name):
-        bins_entry = self.get_BINS_entry(component_name)
-
-        if "yvar" not in bins_entry.attrs:
-            return None, None
-
-        yvar = bins_entry.attrs["yvar"].decode("utf-8")
-        ylabel = bins_entry.attrs["ylabel"].decode("utf-8")
-        y_name = re.sub(r'[^a-zA-Z]', '_', ylabel)
-
-        if y_name not in bins_entry:
-            raise ValueError(f"Exected to find {y_name} in BINS entry of component '{component_name}'")
-
-        y_axis = np.asarray(bins_entry[y_name])
-
-        return yvar, y_axis
+        """
+        :return: tuple with loaded y variable, y axis for given component name
+        """
+        return self.get_var_and_axis(component_name=component_name, var="yvar", label="ylabel")
 
     def get_z_var_and_axis(self, component_name):
-        bins_entry = self.get_BINS_entry(component_name)
-
-        if "zvar" not in bins_entry.attrs:
-            return None, None
-
-        zvar = bins_entry.attrs["zvar"].decode("utf-8")
-        zlabel = bins_entry.attrs["zlabel"].decode("utf-8")
-        z_name = re.sub(r'[^a-zA-Z]', '_', zlabel)
-
-        if z_name not in bins_entry:
-            raise ValueError(f"Exected to find {z_name} in BINS entry of component '{component_name}'")
-
-        z_axis = np.asarray(bins_entry[z_name])
-
-        return zvar, z_axis
+        """
+        :return: tuple with loaded z variable, z axis for given component name
+        """
+        return self.get_var_and_axis(component_name=component_name, var="zvar", label="zlabel")
 
     def get_geometry_dict(self, component_name):
+        """
+        Creates a dictionary describing the geometry of given component name
+
+        This dictionary is not directly the format in the NeXus file, but
+        is supposed to stay fixed even when the NeXus file may change. This
+        method can be updated to reflect these changes and underlying code
+        can remain untouched.
+        """
 
         # Method and amount of information depend on McStas version
         if self.settings["nd_geometry_info"]:
@@ -307,6 +333,9 @@ class McStasNeXus:
                 raise ValueError("Did not find sufficient information to read geometry, recreate file with newer McStas version")
 
     def get_pixels_entry(self, component_name):
+        """
+        :return: pixel entry of given component name
+        """
         bins_entry = self.get_BINS_entry(component_name)
 
         if "pixels" not in bins_entry.keys():
@@ -315,6 +344,9 @@ class McStasNeXus:
         return bins_entry["pixels"]
 
     def get_info_entry(self, component_name):
+        """
+        :return: info entry of given component name
+        """
         output_entry = self.get_output_entry(component_name)
 
         # Get data, there may be BINS and a data entry with a weird name
@@ -328,6 +360,9 @@ class McStasNeXus:
         return output_entry[contents[0]]
 
     def get_component_n_events(self, component_name):
+        """
+        :return: get number of events in component with event data
+        """
 
         info_entry = self.get_info_entry(component_name)
 
@@ -337,6 +372,9 @@ class McStasNeXus:
         return info_entry["events"].shape[0]
 
     def get_component_events_array(self, component_name):
+        """
+        :return: get event array from component with event data
+        """
 
         info_entry = self.get_info_entry(component_name)
 
@@ -346,6 +384,9 @@ class McStasNeXus:
         return np.asarray(info_entry["events"])
 
     def get_component_parameter_entry(self, component_name):
+        """
+        :return: returns the component parameter entry of given component name
+        """
         component_entry  = self.get_component_entry(component_name)
 
         if "parameters" not in component_entry.keys():
@@ -354,11 +395,17 @@ class McStasNeXus:
         return component_entry["parameters"]
 
     def get_component_parameter_names(self, component_name):
+        """
+        :return: returns the component parameter names of given component name
+        """
         parameter_entry = self.get_component_parameter_entry(component_name)
 
         return list(parameter_entry.keys())
 
     def get_component_parameters(self, component_name):
+        """
+        :return: returns dictionary with parameter names and values of given component name
+        """
 
         par_entry = self.get_component_parameter_entry(component_name)
 
@@ -394,6 +441,9 @@ class McStasNeXus:
         return par_dict
 
     def get_component_variables(self, component_name):
+        """
+        :return: variables recorded for each event in given component name
+        """
 
         info_entry = self.get_info_entry(component_name)
 
@@ -403,10 +453,16 @@ class McStasNeXus:
         return info_entry.attrs["variables"].decode("utf-8")
 
     def get_variable_index(self, component_name, variable):
+        """
+        :return: gets variables index for given variable name for given component name
+        """
         variables = self.get_component_variables(component_name)
         return variables.split(" ").index(variable)
 
     def get_event_data(self, variables, component_name=None):
+        """
+        :return: event data of given list of variables for given component name (list of names allowed)
+        """
 
         if component_name is None:
             # Default is to gather data for all components with pixel id's
