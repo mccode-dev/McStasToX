@@ -1,7 +1,15 @@
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+[![PyPI badge](http://img.shields.io/pypi/v/McStasToX.svg)](https://pypi.python.org/pypi/McStasToX)
+[![Anaconda-Server Badge](https://anaconda.org/mccode-dev/McStasToX/badges/version.svg)](https://anaconda.org/mccode-dev/McStasToX)
+[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+
 # McStasToX
+
+## About
+
 Python package to read McStas data and export as python objects in different formats or as other files.
 
-## This project is still at prototype stage
+## DISCLAIMER: This project is still at prototype stage
 The current version of the code is supposed to be a starting point to figure out how such a package should be structured, especially with regards to the API for the user. The demo notebook shows how the package can be used.
 
 ### Dependencies
@@ -18,17 +26,21 @@ To run the demo notebook one will need
 - scipp
 - scippneutron
 
-## Install
-An early version of the package is on pip, but the API is not stable yet.
-
 ```
 pip install mcstastox
+```
+
+## Installation
+> Note that still an early version of the package is on pip, but the API is not stable yet.
+
+```sh
+python -m pip install McStasToX
 ```
 
 ## Basic use
 To for example export to scipp, one needs to specify which component is the source and which is the sample.
 
-Then all monitors with pixel id's are loaded, this is purely supported by Monitor_nD with option stings such as:
+Then all monitors with pixel id's are loaded, this is purely supported by Monitor_nD with option strings such as:
 
 ```
 square x bins=512 y bins=256, neutron pixel min=0 t, list all neutrons
