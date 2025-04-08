@@ -126,7 +126,8 @@ class Data:
 
         :param variables: list of strings: list of strings corresponding to variables
         :param component_name: optional, single component name or list of names
-        :param filter_zeros: bool: Set to True if 0 weights should be removed
+        :param filter_zeros: bool: Set to True if entries with 0 weights
+                                   should be removed
         :return: dictionary with keys named after variables and numpy arrays as values
         """
 
