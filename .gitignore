@@ -46,3 +46,8 @@ docs/generated/
 *.zip
 *.sqw
 *.nxspe
+
+# Mcstas files
+*.c
+*.instr
+*.out
