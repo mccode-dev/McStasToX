@@ -1,12 +1,14 @@
-import h5py
-import os
-import numpy as np
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
 import re
 
+import numpy as np
+
 # All settings should have a default
-defaults = dict(component_numbers=None, # number of digits in component numbers in file
-                nd_geometry_info=False, # True when geometry info included
-                )
+defaults = dict(
+    component_numbers=None,  # number of digits in component numbers in file
+    nd_geometry_info=False,  # True when geometry info included
+)
 
 # Version settings, ordered from newest to oldest
 mcstas_version_settings = {
@@ -14,10 +16,12 @@ mcstas_version_settings = {
     (2, 7, 0): defaults,
 }
 
+
 class McStasNeXus:
     """
     Reads a McStas NeXus files and provides methods to retrieve data or entries
     """
+
     def __init__(self, file_handle):
         self.file_handle = file_handle
         f = self.file_handle
@@ -32,7 +36,9 @@ class McStasNeXus:
                 break
 
         if self.settings is None:
-            raise ValueError("McStas version ", self.mcstas_version, " not supported by this tool.")
+            raise ValueError(
+                "McStas version ", self.mcstas_version, " not supported by this tool."
+            )
 
         # Check file is formatted as expected
         if "entry1" not in list(f.keys()):
@@ -75,10 +81,14 @@ class McStasNeXus:
             raise ValueError("h5 file not formatted as expected, lacks 'entry1'")
 
         if "simulation" not in list(f["entry1"].keys()):
-            raise ValueError("h5 file not formatted as expected, lacks 'entry1/simulation'")
+            raise ValueError(
+                "h5 file not formatted as expected, lacks 'entry1/simulation'"
+            )
 
         if "program" not in list(f["entry1"]["simulation"].attrs):
-            raise ValueError("h5 file not formatted as expected, lacks 'entry1/simulation/program'")
+            raise ValueError(
+                "h5 file not formatted as expected, lacks 'entry1/simulation/program'"
+            )
 
         version_string = f["entry1"]["simulation"].attrs["program"].decode("utf-8")
 
@@ -139,7 +149,9 @@ class McStasNeXus:
         :return: the component entry of the specified component
         """
         if component_name not in self.component_path_names:
-            raise ValueError(f"No component with name '{component_name}' found in file.")
+            raise ValueError(
+                f"No component with name '{component_name}' found in file."
+            )
 
         component_name = self.component_path_names[component_name]
         return self.file_handle["entry1"]["instrument"]["components"][component_name]
@@ -151,7 +163,10 @@ class McStasNeXus:
         component_entry = self.get_component_entry(component_name)
 
         if not self.settings["nd_geometry_info"]:
-            raise ValueError("The version of McStas used to write this NeXus file did not embed monitor_nD geometry info")
+            raise ValueError(
+                "The version of McStas used to write this NeXus file "
+                "did not embed monitor_nD geometry info"
+            )
 
         if "Geometry" not in list(component_entry.keys()):
             raise ValueError(f"'{component_name}' does not have geometry data.")
@@ -198,7 +213,9 @@ class McStasNeXus:
         name = re.sub(r'[^a-zA-Z]', '_', loaded_label)
 
         if name not in bins_entry:
-            raise ValueError(f"Expected to find {name} in BINS entry of component '{component_name}'")
+            raise ValueError(
+                f"Expected to find {name} in BINS entry of component '{component_name}'"
+            )
 
         axis = np.asarray(bins_entry[name])
 
@@ -208,19 +225,25 @@ class McStasNeXus:
         """
         :return: tuple with loaded x variable, x axis for given component name
         """
-        return self.get_var_and_axis(component_name=component_name, var="xvar", label="xlabel")
+        return self.get_var_and_axis(
+            component_name=component_name, var="xvar", label="xlabel"
+        )
 
     def get_y_var_and_axis(self, component_name):
         """
         :return: tuple with loaded y variable, y axis for given component name
         """
-        return self.get_var_and_axis(component_name=component_name, var="yvar", label="ylabel")
+        return self.get_var_and_axis(
+            component_name=component_name, var="yvar", label="ylabel"
+        )
 
     def get_z_var_and_axis(self, component_name):
         """
         :return: tuple with loaded z variable, z axis for given component name
         """
-        return self.get_var_and_axis(component_name=component_name, var="zvar", label="zlabel")
+        return self.get_var_and_axis(
+            component_name=component_name, var="zvar", label="zlabel"
+        )
 
     def get_geometry_dict(self, component_name):
         """
@@ -239,8 +262,18 @@ class McStasNeXus:
 
             # Possible field names, doesn't all need to be there
             # Dict is used in case of name changes on nexus file
-            field_names = ["height", "radius", "xmin", "xmax", "ymin", "ymax", "zmin", "zmax", "Shape identifier"]
-            fields = {name : name for name in field_names}
+            field_names = [
+                "height",
+                "radius",
+                "xmin",
+                "xmax",
+                "ymin",
+                "ymax",
+                "zmin",
+                "zmax",
+                "Shape identifier",
+            ]
+            fields = {name: name for name in field_names}
 
             geometry = {}
             for geometry_name, nexus_field in fields.items():
@@ -250,7 +283,7 @@ class McStasNeXus:
                     # Convert from string to numbers when possible
                     try:
                         read_value = float(read_value)
-                    except:
+                    except TypeError:
                         pass
 
                     geometry[geometry_name] = read_value
@@ -276,16 +309,18 @@ class McStasNeXus:
             DEFS->SHAPE_OFF=7;
             """
 
-            shape_identifier_dict = {0:"square",
-                                     1:"disk",
-                                     2:"sphere",
-                                     3:"cylinder",
-                                     4:"banana",
-                                     5:"box",
-                                     6:"previous",
-                                     7:"off"}
+            shape_identifier_dict = {
+                0: "square",
+                1: "disk",
+                2: "sphere",
+                3: "cylinder",
+                4: "banana",
+                5: "box",
+                6: "previous",
+                7: "off",
+            }
 
-            #convert shape to a string using lookup table
+            # convert shape to a string using lookup table
             if "Shape identifier" in geometry:
                 read_shape_identifier = abs(int(geometry["Shape identifier"]))
                 if read_shape_identifier in shape_identifier_dict:
@@ -299,7 +334,9 @@ class McStasNeXus:
             info_entry = self.get_info_entry(component_name)
 
             if "options" not in info_entry.attrs:
-                raise ValueError(f"Expected 'options' in {component_name}, but wasn't found.")
+                raise ValueError(
+                    f"Expected 'options' in {component_name}, but wasn't found."
+                )
 
             options = info_entry.attrs["options"].decode("utf-8")
 
@@ -310,12 +347,15 @@ class McStasNeXus:
                 yvar = bins_entry.attrs["yvar"].decode("utf-8")
 
                 if xvar.strip() == "x" and yvar.strip() == "y":
-
                     if "xylimits" not in info_entry.attrs:
-                        raise ValueError(f"xylimits exected in NeXus entry for component '{component_name}'")
+                        raise ValueError(
+                            "xylimits eceeded in NeXus entry "
+                            f"for component '{component_name}'"
+                        )
 
                     xylimits = info_entry.attrs["xylimits"].decode("utf-8")
-                    # Matches floats and integers, including negative and positive numbers
+                    # Matches floats and integers,
+                    # including negative and positive numbers
                     matches = re.findall(r'[-+]?\d*\.\d+|[-+]?\d+', xylimits)
                     xmin = float(matches[0])
                     xmax = float(matches[1])
@@ -323,14 +363,27 @@ class McStasNeXus:
                     ymax = float(matches[3])
                     xwidth = xmax - xmin
                     yheight = ymax - ymin
-                    return dict(shape="square", xwidth=xwidth, yheight=yheight,
-                                xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+                    return dict(
+                        shape="square",
+                        xwidth=xwidth,
+                        yheight=yheight,
+                        xmin=xmin,
+                        xmax=xmax,
+                        ymin=ymin,
+                        ymax=ymax,
+                    )
 
                 else:
-                    raise ValueError(f"Can't find sufficient info for geometry in component '{component_name}'")
+                    raise ValueError(
+                        "Can't find sufficient info for "
+                        f"geometry in component '{component_name}'"
+                    )
 
             else:
-                raise ValueError("Did not find sufficient information to read geometry, recreate file with newer McStas version")
+                raise ValueError(
+                    "Did not find sufficient information to read geometry, "
+                    "recreate file with newer McStas version"
+                )
 
     def get_pixels_entry(self, component_name):
         """
@@ -355,7 +408,11 @@ class McStasNeXus:
             contents.remove("BINS")
 
         # Ensure there is only one element
-        assert len(contents) == 1
+        if len(contents) != 1:
+            raise AssertionError(
+                f"Expected only one entry from '{component_name}'"
+                f" but found {len(contents)} entries."
+            )
 
         return output_entry[contents[0]]
 
@@ -367,7 +424,9 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "events" not in info_entry.keys():
-            raise ValueError(f"The component '{component_name}' does not have events entry.")
+            raise ValueError(
+                f"The component '{component_name}' does not have events entry."
+            )
 
         return info_entry["events"].shape[0]
 
@@ -379,7 +438,9 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "events" not in info_entry.keys():
-            raise ValueError(f"The component '{component_name}' does not have events entry.")
+            raise ValueError(
+                f"The component '{component_name}' does not have events entry."
+            )
 
         return np.asarray(info_entry["events"])
 
@@ -387,10 +448,12 @@ class McStasNeXus:
         """
         :return: returns the component parameter entry of given component name
         """
-        component_entry  = self.get_component_entry(component_name)
+        component_entry = self.get_component_entry(component_name)
 
         if "parameters" not in component_entry.keys():
-            raise ValueError(f"The component '{component_name}' does not have a parameter entry")
+            raise ValueError(
+                f"The component '{component_name}' does not have a parameter entry"
+            )
 
         return component_entry["parameters"]
 
@@ -404,7 +467,8 @@ class McStasNeXus:
 
     def get_component_parameters(self, component_name):
         """
-        :return: returns dictionary with parameter names and values of given component name
+        :return: Dictionary with parameter names
+                 and values of given component name
         """
 
         par_entry = self.get_component_parameter_entry(component_name)
@@ -424,7 +488,7 @@ class McStasNeXus:
                 value = this_par_entry.attrs["value"].decode("utf-8")
                 try:
                     value = float(value)
-                except:
+                except TypeError:
                     pass
 
                 par_dict[par_name]["value"] = value
@@ -433,7 +497,7 @@ class McStasNeXus:
                 default = this_par_entry.attrs["default"].decode("utf-8")
                 try:
                     default = float(default)
-                except:
+                except TypeError:
                     pass
 
                 par_dict[par_name]["default"] = default
@@ -448,7 +512,10 @@ class McStasNeXus:
         info_entry = self.get_info_entry(component_name)
 
         if "variables" not in info_entry.attrs:
-            raise ValueError(f"The component '{component_name}' does not have variables attribute in info entry.")
+            raise ValueError(
+                f"The component '{component_name}' does not "
+                "have variables attribute in info entry."
+            )
 
         return info_entry.attrs["variables"].decode("utf-8")
 
@@ -461,7 +528,8 @@ class McStasNeXus:
 
     def get_event_data(self, variables, component_name=None):
         """
-        :return: event data of given list of variables for given component name (list of names allowed)
+        :return: event data of given list of variables
+                 for given component name (list of names allowed)
         """
 
         if component_name is None:
@@ -487,7 +555,9 @@ class McStasNeXus:
             comp_variables = self.get_component_variables(comp)
             for var in variables:
                 if var not in comp_variables:
-                    raise ValueError(f"Component {comp} did not have variable {var} in event data")
+                    raise ValueError(
+                        f"Component {comp} did not have variable {var} in event data"
+                    )
 
         # Allocate return arrays
         returns = {}
