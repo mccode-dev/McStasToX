@@ -1,7 +1,10 @@
-import h5py
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
+import logging
 import os
+
+import h5py
 import numpy as np
-import re
 
 from .ReadNeXus import McStasNeXus
 
@@ -10,9 +13,12 @@ class Data:
     """
     Interface class, with context handler, loads data using McStasNeXus data class
     """
+
     def __init__(self, data_folder, filename="mccode.h5"):
         # Open the file and store the file object as an instance attribute
-        self.file = h5py.File(os.path.join(data_folder, filename), "r", swmr=True) # swmr allows multiple readers
+        self.file = h5py.File(
+            os.path.join(data_folder, filename), "r", swmr=True
+        )  # swmr allows multiple readers
         self.file_object = McStasNeXus(self.file)
 
         # Prepare data structure for when data is requested
@@ -23,6 +29,9 @@ class Data:
         self.pixel_range = {}  # list of len 2, lowest and highest pixel ID
         self.local_pixel_locations = {}  # list of length
         self.global_pixel_locations = {}
+        self.logger = logging.getLogger(__name__)
+        self.logger.addHandler(logging.StreamHandler())
+        self.logger.setLevel(logging.INFO)
 
     def close(self):
         # Close the file when done
@@ -62,12 +71,12 @@ class Data:
 
     def show_components(self):
         """
-        prints all components
+        Show all components
         """
-        print("All components in file:")
+        self.logger.info("All components in file:")
         comps = self.get_components()
         for comp in comps:
-            print(" ", comp)
+            self.logger.info(" ", comp)
 
     def show_components_with_data(self):
         """
@@ -75,11 +84,11 @@ class Data:
         """
         comps = self.get_components_with_data()
         if len(comps) == 0:
-            print("No components with data in file:")
+            self.logger.info("No components with data in file:")
         else:
-            print("All components with data in file:")
+            self.logger.info("All components with data in file:")
             for comp in comps:
-                print(" ", comp)
+                self.logger.info(" ", comp)
 
     def show_components_with_ids(self):
         """
@@ -87,11 +96,11 @@ class Data:
         """
         comps = self.get_components_with_ids()
         if len(comps) == 0:
-            print("No components with pixel id information in file:")
+            self.logger.info("No components with pixel id information in file:")
         else:
-            print("All components with pixel id information in file:")
+            self.logger.info("All components with pixel id information in file:")
             for comp in comps:
-                print(" ", comp)
+                self.logger.info(" ", comp)
 
     def show_components_with_geometry(self):
         """
@@ -99,11 +108,11 @@ class Data:
         """
         comps = self.get_components_with_geometry()
         if len(comps) == 0:
-            print("No components with geometry information in file:")
+            self.logger.info("No components with geometry information in file:")
         else:
-            print("All components with geometry information in file:")
+            self.logger.info("All components with geometry information in file:")
             for comp in comps:
-                print(" ", comp)
+                self.logger.info(" ", comp)
 
     def get_component_variables(self, component_name):
         """
@@ -117,11 +126,14 @@ class Data:
 
         :param variables: list of strings: list of strings corresponding to variables
         :param component_name: optional, single component name or list of names
-        :param filter_zeros: bool: Set to True if entries with weight = 0 should be removed
+        :param filter_zeros: bool: Set to True if entries with 0 weights
+                                   should be removed
         :return: dictionary with keys named after variables and numpy arrays as values
         """
 
-        event_data = self.file_object.get_event_data(variables=variables, component_name=component_name)
+        event_data = self.file_object.get_event_data(
+            variables=variables, component_name=component_name
+        )
         if "p" in variables and filter_zeros:
             # Remove 0 events
             zero_weights = np.where(event_data["p"] == 0)[0]
@@ -136,7 +148,9 @@ class Data:
         """
         component_entry = self.file_object.get_component_entry(component_name)
 
-        return np.asarray(component_entry["Position"]), np.asarray(component_entry["Rotation"])
+        return np.asarray(component_entry["Position"]), np.asarray(
+            component_entry["Rotation"]
+        )
 
     def get_global_component_coordinates(self, component_name):
         """
@@ -146,23 +160,28 @@ class Data:
 
     def get_component_data(self, component_name):
         """
-        :return: event data for event components or tuple with intensity, error, ncount numpy arrays for histograms
+        :return: event data for event components or
+                 tuple with intensity, error, ncount numpy arrays for histograms
         """
         data = self.file_object.get_output_entry(component_name)
 
         if "events" in data.keys():
             return np.asarray(data["events"])
-        elif "data" in data.keys() and "errors" in data.keys() and "ncount" in data.keys():
-            I = np.asarray(data["data"])
-            E = np.asarray(data["errors"])
-            N = np.asarray(data["ncount"])
-            return I, E, N
+        elif (
+            "data" in data.keys()
+            and "errors" in data.keys()
+            and "ncount" in data.keys()
+        ):
+            Intensities = np.asarray(data["data"])
+            Errors = np.asarray(data["errors"])
+            Ncounts = np.asarray(data["ncount"])
+            return Intensities, Errors, Ncounts
 
     def calculate_pixel_locations(self, component_name):
         """
         Calculates pixel locations for given component, these are stored in
         the instance of the class. The pixel locations are calculated in the
-        components own frame, then a seperate method stores and transforms
+        components own frame, then a separate method stores and transforms
         to the global coordinate system.
         """
 
@@ -177,7 +196,10 @@ class Data:
 
         if geometry["shape"] == "square":
             if not (xvar == "x" and yvar == "y"):
-                raise ValueError(f"The monitor {component_name} does not record both x and y for pixel positions")
+                raise ValueError(
+                    f"The monitor {component_name} does not record both "
+                    "x and y for pixel positions"
+                )
 
             x_grid, y_grid = np.meshgrid(x_axis, y_axis)
             local_x = x_grid.ravel()
@@ -186,7 +208,10 @@ class Data:
 
         elif geometry["shape"] == "banana":
             if not (xvar == "th" and yvar == "y"):
-                raise ValueError(f"The monitor {component_name} does not record both theta and y for pixel positions")
+                raise ValueError(
+                    f"The monitor {component_name} does not record both "
+                    "theta and y for pixel positions"
+                )
 
             x_grid, y_grid = np.meshgrid(x_axis, y_axis)
             radius = geometry["radius"]
@@ -197,7 +222,7 @@ class Data:
             local_y = y_grid.ravel()
             local_z = radius * np.cos(theta)
 
-            ###### Can add the remaining monitor nd shapes with their transformations
+            ###### Can add the remaining MonitorND shapes with their transformations
         else:
             raise ValueError("Unknown geometry")
 
@@ -221,8 +246,13 @@ class Data:
             comp_min_pixel = self.pixel_range[comp][0]
             comp_max_pixel = self.pixel_range[comp][1]
 
-            if comp_min_pixel <= min_pixel <= comp_max_pixel or comp_min_pixel <= max_pixel <= comp_max_pixel:
-                raise ValueError(f"Overlap of pixel id's between {comp} and {component_name}")
+            if (
+                comp_min_pixel <= min_pixel <= comp_max_pixel
+                or comp_min_pixel <= max_pixel <= comp_max_pixel
+            ):
+                raise ValueError(
+                    f"Overlap of pixel id's between {comp} and {component_name}"
+                )
 
         # Find point in sequence
         if len(self.component_pixel_order) == 0:
@@ -240,13 +270,16 @@ class Data:
                         self.component_pixel_order.insert(index, component_name)
                         break
 
-        self.global_pixel_locations[component_name] = self.transform(coordinates, component_name)
+        self.global_pixel_locations[component_name] = self.transform(
+            coordinates, component_name
+        )
 
     def transform(self, coordinates, component_name):
         """
         Transforms coordinates in given component names frame to global
 
-        :param coordinates: numpy array of shape (N, 3) representing positions in component frame
+        :param coordinates: numpy array of shape (N, 3)
+                            representing positions in component frame
         :param component_name: component name
         :return: numpy array shape (N, 3) representing positions in global coordinate
         """
@@ -317,12 +350,15 @@ class Data:
 
     def get_id_to_coordinate(self, component_name=None, local=False):
         """
-        Provides numpy array that maps pixel id to pixel position in local or global frame
+        Provides numpy array that maps pixel id
+        to pixel position in local or global frame
 
         The index in the array corresponds directly to the pixel id.
 
-        Masked numpy array is used as there may be gaps in the pixel id range, so an error
-        will happen if a pixel id that does not actually exist is attempted to be accessed.
+        Masked numpy array is used as there may be gaps
+        in the pixel id range, so an error
+        will happen if a pixel id that does not actually exist is
+        attempted to be accessed.
 
         :param component_name: name of component
         :param local: if True, local frame is used
@@ -353,7 +389,7 @@ class Data:
 
             comp_min_pixel = self.pixel_range[comp][0]
             comp_max_pixel = self.pixel_range[comp][1]
-            result[comp_min_pixel:comp_max_pixel + 1, :] = coordinates
+            result[comp_min_pixel : comp_max_pixel + 1, :] = coordinates
 
         return result
 
@@ -363,8 +399,9 @@ class Data:
 
         The index in the array corresponds directly to the pixel id.
 
-        Masked numpy array is used as there may be gaps in the pixel id range, so an error
-        will happen if a pixel id that does not actually exist is attempted to be accessed.
+        Masked numpy array is used as there may be gaps in the pixel id range,
+        so an error will happen if a pixel id that does not actually exist
+        is attempted to be accessed.
 
         :param component_name: name of component
         :return: masked numpy array, parts with no existing pixel id masked
@@ -377,30 +414,42 @@ class Data:
 
         The index in the array corresponds directly to the pixel id.
 
-        Masked numpy array is used as there may be gaps in the pixel id range, so an error
-        will happen if a pixel id that does not actually exist is attempted to be accessed.
+        Masked numpy array is used as there may be gaps
+        in the pixel id range, so an error
+        will happen if a pixel id that does not actually exist
+        is attempted to be accessed.
 
         :param component_name: name of component
         :return: masked numpy array, parts with no existing pixel id masked
         """
         return self.get_id_to_coordinate(local=True, component_name=component_name)
 
-    def export_scipp_simple(self, source_name, sample_name, component_name=None,
-                            filter_zeros=True, extra_variables=None):
+    def export_scipp_simple(
+        self,
+        source_name,
+        sample_name,
+        component_name=None,
+        filter_zeros=True,
+        extra_variables=None,
+    ):
         """
-        Provides simple scipp object thats easy to work with but takes more space
+        Provides simple scipp object that is easy to work with but takes more space
 
         :param source_name: Name of source component
         :param sample_name: Name of sample component
-        :param component_name: Name of component with data (if None all is loaded, can also be list)
+        :param component_name: Name of component with data
+                               (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include (not yet functional)
+        :param extra_variables: List of extra variables to load and include
+                                (not yet functional)
         :return: scipp object
         """
         try:
             import scipp as sc
-        except:
-            raise ImportError("Scipp installation required to export to Scipp format")
+        except ImportError as e:
+            raise ImportError(
+                "Scipp installation required to export to Scipp format"
+            ) from e
 
         variables = ["p", "t", "id"]
 
@@ -411,43 +460,61 @@ class Data:
             # Default is to gather weight, time and id
             variables += extra_variables
 
-        event_data = self.get_event_data(variables=variables, component_name=component_name,
-                                         filter_zeros=filter_zeros)
+        event_data = self.get_event_data(
+            variables=variables,
+            component_name=component_name,
+            filter_zeros=filter_zeros,
+        )
 
         # Retrieve coordinates corresponding to id's
-        global_coordinates = self.get_id_to_global_coordinates(component_name=component_name)
+        global_coordinates = self.get_id_to_global_coordinates(
+            component_name=component_name
+        )
         global_pos = global_coordinates[event_data["id"].astype(int), :]
 
         source_pos = self.get_global_component_coordinates(source_name)
         sample_pos = self.get_global_component_coordinates(sample_name)
 
         events = sc.DataArray(
-            data=sc.array(dims=['events'], unit=sc.units.counts, values=event_data["p"]),
+            data=sc.array(
+                dims=['events'], unit=sc.units.counts, values=event_data["p"]
+            ),
             coords={
                 'position': sc.vectors(dims=['events'], values=global_pos, unit='m'),
                 't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
                 'source_position': sc.vector(source_pos, unit='m'),
                 'sample_position': sc.vector(sample_pos, unit='m'),
-            })
+            },
+        )
 
         return events
 
-    def export_scipp(self, source_name, sample_name, component_name=None,
-                     filter_zeros=True, extra_variables=None):
+    def export_scipp(
+        self,
+        source_name,
+        sample_name,
+        component_name=None,
+        filter_zeros=True,
+        extra_variables=None,
+    ):
         """
         Provides scipp DataGroup with pixel information
 
         :param source_name: Name of source component
         :param sample_name: Name of sample component
-        :param component_name: Name of component with data (if None all is loaded, can also be list)
+        :param component_name: Name of component with data
+                               (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include (not yet functional)
+        :param extra_variables: List of extra variables to load and include
+                                (not yet functional)
         :return: scipp DataGroup with events, positions, bank_ids and bank_names
         """
         try:
             import scipp as sc
-        except:
-            raise ImportError("Scipp installation required to export to Scipp format")
+        except ImportError as e:
+            raise ImportError(
+                "Scipp installation required to export to Scipp format"
+            ) from e
 
         # todo: Make as generator to work in chunks
 
@@ -458,23 +525,33 @@ class Data:
             # Default is to gather weight, time and id
             variables += extra_variables
 
-        event_data = self.get_event_data(variables=variables, component_name=component_name,
-                                         filter_zeros=filter_zeros)
+        event_data = self.get_event_data(
+            variables=variables,
+            component_name=component_name,
+            filter_zeros=filter_zeros,
+        )
         # Prepare events data
         source_pos = self.get_global_component_coordinates(source_name)
         sample_pos = self.get_global_component_coordinates(sample_name)
 
         events = sc.DataArray(
-            data=sc.array(dims=['events'], unit=sc.units.counts, values=event_data["p"]),
+            data=sc.array(
+                dims=['events'], unit=sc.units.counts, values=event_data["p"]
+            ),
             coords={
-                'pixel_id': sc.array(dims=['events'], values=event_data["id"].astype(int)),
+                'pixel_id': sc.array(
+                    dims=['events'], values=event_data["id"].astype(int)
+                ),
                 't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
                 'source_position': sc.vector(source_pos, unit='m'),
                 'sample_position': sc.vector(sample_pos, unit='m'),
-            })
+            },
+        )
 
         # Retrieve coordinates corresponding to id's
-        global_coordinates = self.get_id_to_global_coordinates(component_name=component_name)
+        global_coordinates = self.get_id_to_global_coordinates(
+            component_name=component_name
+        )
         id_object = sc.vectors(dims=['pixel_id'], values=global_coordinates, unit='m')
 
         # Prepare information on pixel ids and names
@@ -488,13 +565,20 @@ class Data:
         bank_names = sc.array(dims=['panel_id'], values=names)
 
         # Create DataGroup with all information
-        output_object = sc.DataGroup(events=events, positions=id_object,
-                                     bank_ids=comp_id_range,
-                                     bank_names=bank_names)
+        output_object = sc.DataGroup(
+            events=events,
+            positions=id_object,
+            bank_ids=comp_id_range,
+            bank_names=bank_names,
+        )
 
         # Group events by pixels and embed the pixel positions to each group
         output_object["events"] = sc.group(output_object["events"], "pixel_id")
-        pixel_positions = output_object["positions"].values[output_object["events"].coords["pixel_id"].values, :]
-        output_object["events"].coords["position"] = sc.vectors(dims=["pixel_id"], values=pixel_positions, unit="m")
+        pixel_positions = output_object["positions"].values[
+            output_object["events"].coords["pixel_id"].values, :
+        ]
+        output_object["events"].coords["position"] = sc.vectors(
+            dims=["pixel_id"], values=pixel_positions, unit="m"
+        )
 
         return output_object
