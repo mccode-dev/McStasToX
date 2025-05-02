@@ -222,7 +222,7 @@ class Data:
             local_y = y_grid.ravel()
             local_z = radius * np.cos(theta)
 
-            ###### Can add the remaining MonitorND shapes with their transformations
+            ###### Can add the remaining Monitor_nD shapes with their transformations
         else:
             raise ValueError("Unknown geometry")
 
