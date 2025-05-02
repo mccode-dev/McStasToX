@@ -47,6 +47,9 @@ jobs:
         ESS_PROTECTED_FILESTORE_PASSWORD: ${{ secrets.ESS_PROTECTED_FILESTORE_PASSWORD }}
 
     steps:
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          init-shell: bash
       - run: sudo apt install --yes graphviz pandoc
       - uses: actions/checkout@v4
         with:
