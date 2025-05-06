@@ -72,7 +72,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/docs.txt
           micromamba install -c conda-forge mcstas=3.5 -y
-          shell: micromamba-shell {0}
+        shell: micromamba-shell {0}
       - run: |
           mcstas --version
           python -m sphinx -j2 -v -b html -d ${DOCSWORKDIR}/docs_doctrees docs html
