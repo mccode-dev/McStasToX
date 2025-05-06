@@ -65,19 +65,23 @@ jobs:
 
       # Manually building the docs.
       # We(I) couldn't figure out how we do it with `tox` yet...
-      - run: python -m pip install --upgrade pip
+      - run: export DOCSWORKDIR=".tox/docs"
+      - run: mkdir -p ${DOCSWORKDIR}
       # - run: python -m pip install -r requirements/ci.txt
       - run: micromamba create -n mcstas python=3.10 --yes
-      - run: which python
-      - run: python -m pip install -r requirements/docs.txt
-      - run: micromamba install -c conda-forge mcstas=3.5 -y
-      - run: mcstas --version
-      - run: mkdir -p .tox/docs
-      - run: export DOCSWORKDIR=".tox/docs"
-      - run: python -m sphinx -j2 -v -b html -d ${DOCSWORKDIR}/docs_doctrees docs html
-      - run: python -m sphinx -j2 -v -b doctest -d ${DOCSWORKDIR}/docs_doctrees docs html
-      - run: tox -e releasedocs -- "${VERSION}"
-      - run: find html -type f -name "*.ipynb" -not -path "html/_sources/*" -delete
+      - run: |
+          which python
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/docs.txt
+          micromamba install -c conda-forge mcstas=3.5 -y
+          mcstas --version
+        shell: micromamba-shell {0}
+      - run: |
+          python -m sphinx -j2 -v -b html -d ${DOCSWORKDIR}/docs_doctrees docs html
+          python -m sphinx -j2 -v -b doctest -d ${DOCSWORKDIR}/docs_doctrees docs html
+          tox -e releasedocs -- "${VERSION}"
+          find html -type f -name "*.ipynb" -not -path "html/_sources/*" -delete
+        shell: micromamba-shell {0}
       # Cleaning up the docs.
         if: ${{ inputs.version != '' }}
       - run: tox -e docs
