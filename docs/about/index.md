@@ -18,9 +18,9 @@ To cite a specific version of McStasToX, select the desired version on Zenodo to
 
 ## Older versions of the documentation
 
-Older versions of the documentation pages can be found under the assets of each [release](https://github.com/mccode-dev/McStasToX/releases).
+Older versions of the documentation pages can be found under the assets of each [release](https://github.com/mccode-dev/mcstastox/releases).
 Simply download the archive, unzip and view locally in a web browser.
 
 ## Source code and development
 
-McStasToX is hosted and developed [on GitHub](https://github.com/mccode-dev/McStasToX).
+McStasToX is hosted and developed [on GitHub](https://github.com/mccode-dev/mcstastox).

@@ -99,7 +99,7 @@ master_doc = 'index'
 #
 
 try:
-    release = get_version("McStasToX")
+    release = get_version("mcstastox")
     version = ".".join(release.split('.')[:3])  # CalVer
 except PackageNotFoundError:
     logger.info(
@@ -151,19 +151,19 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/mccode-dev/McStasToX",
+            "url": "https://github.com/mccode-dev/mcstastox",
             "icon": "fa-brands fa-github",
             "type": "fontawesome",
         },
         {
             "name": "PyPI",
-            "url": "https://pypi.org/project/McStasToX/",
+            "url": "https://pypi.org/project/mcstastox/",
             "icon": "fa-brands fa-python",
             "type": "fontawesome",
         },
         {
             "name": "Conda",
-            "url": "https://anaconda.org/mccode-dev/McStasToX",
+            "url": "https://anaconda.org/mccode-dev/mcstastox",
             "icon": "fa-custom fa-anaconda",
             "type": "fontawesome",
         },
@@ -192,7 +192,7 @@ html_js_files = ["anaconda-icon.js"]
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'McStasToXdoc'
+htmlhelp_basename = 'mcstastoxdoc'
 
 # -- Options for Matplotlib in notebooks ----------------------------------
 
@@ -241,4 +241,7 @@ doctest_default_flags = (
 linkcheck_ignore = [
     # Specific lines in Github blobs cannot be found by linkcheck.
     r'https?://github\.com/.*?/blob/[a-f0-9]+/.+?#',
+    # Linkcheck seems to be denied access by some DOI resolvers.
+    # Since DOIs are supposed to be permanent, we don't need to check them.'
+    r'https://doi\.org/',
 ]
