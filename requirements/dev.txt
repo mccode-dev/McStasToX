@@ -32,7 +32,7 @@ click==8.1.8
     # via
     #   pip-compile-multi
     #   pip-tools
-copier==9.6.0
+copier==9.7.1
     # via -r dev.in
 dunamai==1.23.1
     # via copier
@@ -40,9 +40,9 @@ fqdn==1.5.1
     # via jsonschema
 funcy==2.0
     # via copier
-h11==0.14.0
+h11==0.16.0
     # via httpcore
-httpcore==1.0.7
+httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via jupyterlab
@@ -71,7 +71,7 @@ jupyter-server==2.15.0
     #   notebook-shim
 jupyter-server-terminals==0.5.3
     # via jupyter-server
-jupyterlab==4.4.0
+jupyterlab==4.4.1
     # via -r dev.in
 jupyterlab-server==2.27.3
     # via jupyterlab
@@ -81,7 +81,7 @@ overrides==7.7.0
     # via jupyter-server
 pathspec==0.12.1
     # via copier
-pip-compile-multi==2.8.0
+pip-compile-multi==3.0.0
     # via -r dev.in
 pip-tools==7.4.1
     # via pip-compile-multi
@@ -91,9 +91,9 @@ prometheus-client==0.21.1
     # via jupyter-server
 pycparser==2.22
     # via cffi
-pydantic==2.11.3
+pydantic==2.11.4
     # via copier
-pydantic-core==2.33.1
+pydantic-core==2.33.2
     # via pydantic
 python-json-logger==3.3.0
     # via jupyter-events

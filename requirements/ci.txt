@@ -7,11 +7,11 @@
 #
 cachetools==5.5.2
     # via tox
-certifi==2025.1.31
+certifi==2025.4.26
     # via requests
 chardet==5.2.0
     # via tox
-charset-normalizer==3.4.1
+charset-normalizer==3.4.2
     # via requests
 colorama==0.4.6
     # via tox
@@ -27,7 +27,7 @@ gitpython==3.1.44
     # via -r ci.in
 idna==3.10
     # via requests
-packaging==24.2
+packaging==25.0
     # via
     #   -r ci.in
     #   pyproject-api
@@ -50,9 +50,9 @@ tomli==2.2.1
     #   tox
 tox==4.25.0
     # via -r ci.in
-typing-extensions==4.13.1
+typing-extensions==4.13.2
     # via tox
-urllib3==2.3.0
+urllib3==2.4.0
     # via requests
-virtualenv==20.30.0
+virtualenv==20.31.1
     # via tox
