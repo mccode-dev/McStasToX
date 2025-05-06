@@ -1,7 +1,16 @@
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # Note: We are not listing package-ecosystem: "github-actions". This causes
+  # noise in all template instances. Instead dependabot.yml in scipp/copier_template
+  # triggers updates of github-actions in the *template*. We then use `copier update`
+  # in template instances.
+  - package-ecosystem: "pip"
+    directory: "/requirements"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    allow:
+      - dependency-name: "scipp"
+        dependency-type: "direct"
+      - dependency-name: "mcstasscript"
+        dependency-type: "direct"

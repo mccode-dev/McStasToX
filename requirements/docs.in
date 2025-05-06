@@ -9,3 +9,5 @@ sphinx-autodoc-typehints
 sphinx-copybutton
 sphinx-design
 matplotlib
+plopp[all]
+pythreejs  # For instrument view.

@@ -3,7 +3,7 @@
 ## Classes
 
 ```{eval-rst}
-.. currentmodule:: McStasToX
+.. currentmodule:: mcstastox
 
 .. autosummary::
    :toctree: ../generated/classes

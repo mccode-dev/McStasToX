@@ -1,6 +1,6 @@
 [build-system]
 requires = [
-  "setuptools>=68",
+  "setuptools>=77",
   "setuptools_scm[toml]>=8.0",
 ]
 build-backend = "setuptools.build_meta"
@@ -13,7 +13,6 @@ license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -46,9 +45,9 @@ test = [
 ]
 
 [project.urls]
-"Bug Tracker" = "https://github.com/mccode-dev/McStasToX/issues"
-"Documentation" = "https://mccode-dev.github.io/McStasToX"
-"Source" = "https://github.com/mccode-dev/McStasToX"
+"Bug Tracker" = "https://github.com/mccode-dev/mcstastox/issues"
+"Documentation" = "https://mccode-dev.github.io/mcstastox"
+"Source" = "https://github.com/mccode-dev/mcstastox"
 
 [tool.setuptools_scm]
 
@@ -83,7 +82,7 @@ ignore = [
     "C408"
 ]
 fixable = ["B010", "I001", "PT001", "RUF022"]
-isort.known-first-party = ["McStasToX"]
+isort.known-first-party = ["mcstastox"]
 pydocstyle.convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]

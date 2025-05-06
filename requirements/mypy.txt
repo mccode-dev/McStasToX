@@ -8,5 +8,5 @@
 -r test.txt
 mypy==1.15.0
     # via -r mypy.in
-mypy-extensions==1.0.0
+mypy-extensions==1.1.0
     # via mypy

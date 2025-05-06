@@ -51,3 +51,4 @@ docs/generated/
 *.c
 *.instr
 *.out
+*.dSYM
