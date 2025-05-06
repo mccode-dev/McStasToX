@@ -76,7 +76,7 @@ class Data:
         self.logger.info("All components in file:")
         comps = self.get_components()
         for comp in comps:
-            self.logger.info(" ", comp)
+            self.logger.info("%s", comp)
 
     def show_components_with_data(self):
         """
@@ -88,7 +88,7 @@ class Data:
         else:
             self.logger.info("All components with data in file:")
             for comp in comps:
-                self.logger.info(" ", comp)
+                self.logger.info("%s", comp)
 
     def show_components_with_ids(self):
         """
@@ -100,7 +100,7 @@ class Data:
         else:
             self.logger.info("All components with pixel id information in file:")
             for comp in comps:
-                self.logger.info(" ", comp)
+                self.logger.info("%s", comp)
 
     def show_components_with_geometry(self):
         """
@@ -112,7 +112,7 @@ class Data:
         else:
             self.logger.info("All components with geometry information in file:")
             for comp in comps:
-                self.logger.info(" ", comp)
+                self.logger.info("%s", comp)
 
     def get_component_variables(self, component_name):
         """
