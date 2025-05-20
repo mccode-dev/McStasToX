@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 # General information about the project.
 project = 'McStasToX'
-copyright = '2025 Scipp contributors'
-author = 'Scipp contributors'
+copyright = '2025 MCCODE contributors'
+author = 'MCCODE contributors'
 
 html_show_sourcelink = True
 
