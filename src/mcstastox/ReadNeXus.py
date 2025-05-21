@@ -49,14 +49,22 @@ class McStasNeXus:
 
     """
 
-    def __init__(self, file_handle, mcstas_version: tuple[int, int, int] | None = None):
+    def __init__(
+        self,
+        file_handle,
+        *,
+        mcstas_version: tuple[int, int, int] | None = None,
+        mcstas_setting_registry: _McStasVersionSettingTp = _MCSTAS_VERSION_SETTINGS,
+    ):
         self.file_handle = file_handle
         f = self.file_handle
 
         self.mcstas_version = mcstas_version or self.read_mcstas_version()
 
         # Load settings appropriate for this McStas version
-        self.settings = _get_mcstas_version_settings(self.mcstas_version)
+        self.settings = _get_mcstas_version_settings(
+            self.mcstas_version, mcstas_setting_registry
+        )
 
         # Check file is formatted as expected
         if "entry1" not in list(f.keys()):
@@ -91,7 +99,7 @@ class McStasNeXus:
                 self.component_names.append(component_name)
                 self.component_path_names[component_name] = name
 
-    def read_mcstas_version(self):
+    def read_mcstas_version(self) -> tuple[int, int, int]:
         f = self.file_handle
 
         # First attempt at reading version
