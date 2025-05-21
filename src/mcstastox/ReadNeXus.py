@@ -1,44 +1,62 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
 import re
+from dataclasses import dataclass
+from types import MappingProxyType
 
 import numpy as np
 
-# All settings should have a default
-defaults = dict(
-    component_numbers=None,  # number of digits in component numbers in file
-    nd_geometry_info=False,  # True when geometry info included
+
+@dataclass(frozen=True)
+class McStasVersionSetting:
+    component_numbers: int | None = None
+    """Number of digits in component numbers in file"""
+    nd_geometry_info: bool = False
+    """True when geometry info included"""
+
+
+# McStas version settings registry.
+# Easy cheat-sheet for each version of McStas.
+# Keep it rrdered from the newest to the oldest for easier maintenance.
+_McStasVersionSettingTp = MappingProxyType[tuple[int, int, int], McStasVersionSetting]
+_MCSTAS_VERSION_SETTINGS: _McStasVersionSettingTp = MappingProxyType(
+    {
+        (3, 5, 20): McStasVersionSetting(component_numbers=4, nd_geometry_info=True),
+        (2, 7, 0): McStasVersionSetting(),  # Use default values between 2.7 and 3.5.20
+    }
 )
 
-# Version settings, ordered from newest to oldest
-mcstas_version_settings = {
-    (3, 5, 20): dict(defaults, component_numbers=4, nd_geometry_info=True),
-    (2, 7, 0): defaults,
-}
+
+def _get_mcstas_version_settings(
+    version: tuple[int, int, int],
+    mcstas_version_setting_registry: _McStasVersionSettingTp = _MCSTAS_VERSION_SETTINGS,
+) -> McStasVersionSetting:
+    """
+    Get the settings for a given McStas version.
+    """
+    latest_version_first_sorted_settings = sorted(
+        mcstas_version_setting_registry.items(), key=lambda x: x[0], reverse=True
+    )
+    for ver, settings in latest_version_first_sorted_settings:
+        if version >= ver:
+            return settings
+    raise ValueError(f"McStas version {version} not supported by this tool.")
 
 
 class McStasNeXus:
     """
     Reads a McStas NeXus files and provides methods to retrieve data or entries
+
     """
 
-    def __init__(self, file_handle):
+    def __init__(self, file_handle, mcstas_version: tuple[int, int, int] | None = None):
         self.file_handle = file_handle
         f = self.file_handle
 
-        self.mcstas_version = self.read_mcstas_version()
+        self.mcstas_version = mcstas_version or self.read_mcstas_version()
 
         # Load settings appropriate for this McStas version
-        self.settings = None
-        for version, settings in mcstas_version_settings.items():
-            if self.mcstas_version >= version:
-                self.settings = settings
-                break
-
-        if self.settings is None:
-            raise ValueError(
-                "McStas version ", self.mcstas_version, " not supported by this tool."
-            )
+        self.settings = _get_mcstas_version_settings(self.mcstas_version)
 
         # Check file is formatted as expected
         if "entry1" not in list(f.keys()):
@@ -60,11 +78,11 @@ class McStasNeXus:
             raise ValueError("h5 file not formatted as expected, lacks 'components'.")
 
         # Grab basic information
-        if self.settings["component_numbers"] is None:
+        if self.settings.component_numbers is None:
             self.component_names = f["entry1"]["instrument"]["components"].keys()
             self.component_path_names = {name: name for name in self.component_names}
         else:
-            comp_name_start_index = self.settings["component_numbers"] + 1
+            comp_name_start_index = self.settings.component_numbers + 1
             self.component_names = []
             self.component_path_names = {}
             full_comp_names = f["entry1"]["instrument"]["components"].keys()
@@ -97,6 +115,11 @@ class McStasNeXus:
             return tuple(map(int, match.groups()))
 
         # Can have other methods here for older / newer formats
+        # If not, raise error
+        raise ValueError(
+            f"Could not find version in file, found '{version_string}."
+            "Hardcode the version as an argument to the class."
+        )
 
     def get_components(self):
         """
@@ -162,7 +185,7 @@ class McStasNeXus:
         """
         component_entry = self.get_component_entry(component_name)
 
-        if not self.settings["nd_geometry_info"]:
+        if not self.settings.nd_geometry_info:
             raise ValueError(
                 "The version of McStas used to write this NeXus file "
                 "did not embed monitor_nD geometry info"
@@ -256,7 +279,7 @@ class McStasNeXus:
         """
 
         # Method and amount of information depend on McStas version
-        if self.settings["nd_geometry_info"]:
+        if self.settings.nd_geometry_info:
             # Use geometry info
             geometry_info = self.get_geometry_entry(component_name)
 
