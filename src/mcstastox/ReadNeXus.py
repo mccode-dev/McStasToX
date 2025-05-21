@@ -120,7 +120,7 @@ class McStasNeXus:
                 zip(self.component_names, component_paths, strict=True)
             )
 
-    def _read_mcstas_version(self)-> tuple[int, int, int]:
+    def _read_mcstas_version(self) -> tuple[int, int, int]:
         f = self.file_handle
 
         # First attempt at reading version
