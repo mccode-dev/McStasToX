@@ -88,15 +88,14 @@ class McStasNeXus:
         mcstas_setting_registry: _McStasVersionSettingTp = _MCSTAS_VERSION_SETTINGS,
     ):
         self.file_handle = file_handle
+        # Check file is formatted as expected
+        _validate_file(self.file_handle)
         self.mcstas_version = mcstas_version or self._read_mcstas_version()
 
         # Load settings appropriate for this McStas version
         self.settings = _get_mcstas_version_settings(
             self.mcstas_version, mcstas_setting_registry
         )
-
-        # Check file is formatted as expected
-        _validate_file(self.file_handle)
 
         # Grab basic information
         self.component_names: list
@@ -122,19 +121,10 @@ class McStasNeXus:
 
     def _read_mcstas_version(self) -> tuple[int, int, int]:
         f = self.file_handle
-
-        # First attempt at reading version
-        if "entry1" not in list(f.keys()):
-            raise ValueError("h5 file not formatted as expected, lacks 'entry1'")
-
-        if "simulation" not in list(f["entry1"].keys()):
-            raise ValueError(
-                "h5 file not formatted as expected, lacks 'entry1/simulation'"
-            )
-
         if "program" not in list(f["entry1"]["simulation"].attrs):
             raise ValueError(
-                "h5 file not formatted as expected, lacks 'entry1/simulation/program'"
+                "h5 file not formatted as expected, "
+                "lacks 'program' attribute in 'entry1/simulation/program'"
             )
 
         version_string = f["entry1"]["simulation"].attrs["program"].decode("utf-8")
