@@ -7,7 +7,7 @@ description: 'Python package to read McStas data and export as python objects in
 
     '
 max_python: '3.13'
-min_python: '3.11'
+min_python: '3.10'
 namespace_package: ''
 nightly_deps: scipp,scippnexus,mccode-dev/mcstasscript@master
 orgname: mccode-dev
