@@ -1,15 +1,15 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: 3f79959
+_commit: fb67133
 _src_path: gh:scipp/copier_template
 description: 'Python package to read McStas data and export as python objects in different
     formats or as other files.
 
 
     '
-max_python: '3.12'
-min_python: '3.10'
+max_python: '3.13'
+min_python: '3.11'
 namespace_package: ''
-nightly_deps: scipp,scippnexus,mcstasscript
+nightly_deps: scipp,scippnexus,mccode-dev/mcstasscript@master
 orgname: mccode-dev
 prettyname: McStasToX
 projectname: mcstastox
