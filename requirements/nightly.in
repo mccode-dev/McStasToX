@@ -9,3 +9,4 @@ scipp
 --extra-index-url=https://pypi.org/simple
 --pre
 scippnexus @ git+https://github.com/scipp/scippnexus@main
+mcstasscript @ git+https://github.com/mccode-dev/mcstasscript@master

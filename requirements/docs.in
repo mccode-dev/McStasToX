@@ -11,3 +11,4 @@ sphinx-design
 matplotlib
 plopp[all]
 pythreejs  # For instrument view.
+tornado>=6.5

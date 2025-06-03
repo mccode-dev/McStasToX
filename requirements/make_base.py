@@ -56,6 +56,12 @@ def as_nightly(repo: str) -> str:
         org, repo = repo.split("/")
     else:
         org = "scipp"
+
+    if "@" in repo:
+        repo, branch = repo.split("@")
+    else:
+        branch = "main"
+
     if repo == "scipp":
         # With the standard pip resolver index-url takes precedence over
         # extra-index-url but with uv it's reversed, so if we move to tox-uv
@@ -66,7 +72,7 @@ def as_nightly(repo: str) -> str:
             "--extra-index-url=https://pypi.org/simple\n"
             "--pre"
         )
-    return f"{repo} @ git+https://github.com/{org}/{repo}@main"
+    return f"{repo} @ git+https://github.com/{org}/{repo}@{branch}"
 
 
 nightly = tuple(args.nightly.split(",") if args.nightly else [])
