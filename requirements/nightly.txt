@@ -35,7 +35,7 @@ h5py==3.15.1
     #   scippnexus
 iniconfig==2.3.0
     # via pytest
-ipython==9.8.0
+ipython==9.10.0
     # via ipywidgets
 ipython-pygments-lexers==1.1.1
     # via ipython
@@ -59,7 +59,7 @@ matplotlib-inline==0.2.1
     # via ipython
 mcstasscript @ git+https://github.com/mccode-dev/mcstasscript@master
     # via -r nightly.in
-numpy==2.4.0rc1
+numpy==2.4.2
     # via
     #   -r nightly.in
     #   contourpy
@@ -69,7 +69,7 @@ numpy==2.4.0rc1
     #   mcstasscript
     #   scipp
     #   scipy
-packaging==25.0
+packaging==26.0
     # via
     #   matplotlib
     #   pytest
@@ -77,7 +77,7 @@ parso==0.8.5
     # via jedi
 pexpect==4.9.0
     # via ipython
-pillow==12.0.0
+pillow==12.1.0
     # via matplotlib
 pint==0.25.2
     # via libpyvinyl
@@ -96,7 +96,7 @@ pygments==2.19.2
     #   ipython
     #   ipython-pygments-lexers
     #   pytest
-pyparsing==3.3.0b1
+pyparsing==3.3.2
     # via matplotlib
 pytest==9.0.2
     # via -r nightly.in
@@ -110,7 +110,7 @@ scipp==100.0.0.dev0
     #   scippnexus
 scippnexus @ git+https://github.com/scipp/scippnexus@main
     # via -r nightly.in
-scipy==1.17.0rc1
+scipy==1.17.0
     # via
     #   libpyvinyl
     #   scippnexus
@@ -127,10 +127,11 @@ typing-extensions==4.15.0
     # via
     #   flexcache
     #   flexparser
+    #   ipython
     #   pint
 typish==1.9.3
     # via jsons
-wcwidth==0.2.14
+wcwidth==0.5.3
     # via prompt-toolkit
 widgetsnbextension==4.0.15
     # via ipywidgets
