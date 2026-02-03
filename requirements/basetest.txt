@@ -5,11 +5,13 @@
 #
 #    requirements upgrade
 #
-iniconfig==2.1.0
+iniconfig==2.3.0
     # via pytest
-packaging==25.0
+packaging==26.0
     # via pytest
 pluggy==1.6.0
     # via pytest
-pytest==8.3.5
+pygments==2.19.2
+    # via pytest
+pytest==9.0.2
     # via -r basetest.in
