@@ -9,7 +9,7 @@ asttokens==3.0.1
     # via stack-data
 comm==0.2.3
     # via ipywidgets
-contourpy==1.3.3
+contourpy==1.3.2
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
@@ -17,6 +17,8 @@ decorator==5.2.1
     # via ipython
 dill==0.3.5.1
     # via libpyvinyl
+exceptiongroup==1.3.1
+    # via ipython
 executing==2.2.1
     # via stack-data
 flexcache==0.3
@@ -29,10 +31,8 @@ h5py==3.15.1
     # via
     #   -r base.in
     #   libpyvinyl
-ipython==9.10.0
+ipython==8.38.0
     # via ipywidgets
-ipython-pygments-lexers==1.1.1
-    # via ipython
 ipywidgets==8.1.8
     # via mcstasscript
 jedi==0.19.2
@@ -51,9 +51,9 @@ matplotlib==3.10.8
     # via mcstasscript
 matplotlib-inline==0.2.1
     # via ipython
-mcstasscript==0.0.77
+mcstasscript==0.0.78
     # via -r base.in
-numpy==2.4.2
+numpy==2.2.6
     # via
     #   -r base.in
     #   contourpy
@@ -71,7 +71,7 @@ pexpect==4.9.0
     # via ipython
 pillow==12.1.0
     # via matplotlib
-pint==0.25.2
+pint==0.24.4
     # via libpyvinyl
 platformdirs==4.5.1
     # via pint
@@ -82,18 +82,16 @@ ptyprocess==0.7.0
 pure-eval==0.2.3
     # via stack-data
 pygments==2.19.2
-    # via
-    #   ipython
-    #   ipython-pygments-lexers
+    # via ipython
 pyparsing==3.3.2
     # via matplotlib
 python-dateutil==2.9.0.post0
     # via matplotlib
 pyyaml==6.0.3
     # via mcstasscript
-scipp==26.2.0
+scipp==25.5.1
     # via -r base.in
-scipy==1.17.0
+scipy==1.15.3
     # via libpyvinyl
 six==1.17.0
     # via python-dateutil
@@ -106,6 +104,7 @@ traitlets==5.14.3
     #   matplotlib-inline
 typing-extensions==4.15.0
     # via
+    #   exceptiongroup
     #   flexcache
     #   flexparser
     #   ipython
