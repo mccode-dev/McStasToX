@@ -187,7 +187,7 @@ class Data:
 
         xvar, x_axis = self.file_object.get_x_var_and_axis(component_name)
         yvar, y_axis = self.file_object.get_y_var_and_axis(component_name)
-        #zvar, z_axis = self.file_object.get_z_var_and_axis(component_name)
+        # zvar, z_axis = self.file_object.get_z_var_and_axis(component_name)
 
         pixels = self.file_object.get_pixels_entry(component_name)
         pixels = np.asarray(pixels, dtype="int")
