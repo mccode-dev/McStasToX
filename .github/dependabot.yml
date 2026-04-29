@@ -7,7 +7,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/requirements"
     schedule:
-      interval: "weekly"
+      interval: "quarterly"
     target-branch: "main"
     allow:
       - dependency-name: "scipp"
