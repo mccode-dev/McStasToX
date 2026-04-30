@@ -50,7 +50,6 @@ jobs:
     env:
         ESS_PROTECTED_FILESTORE_USERNAME: ${{ secrets.ESS_PROTECTED_FILESTORE_USERNAME }}
         ESS_PROTECTED_FILESTORE_PASSWORD: ${{ secrets.ESS_PROTECTED_FILESTORE_PASSWORD }}
-        DOCSWORKDIR: "build/docs"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -75,5 +74,5 @@ jobs:
         if: ${{ inputs.publish }}
         with:
           branch: gh-pages
-          folder: html
+          folder: build/html
           single-commit: true
