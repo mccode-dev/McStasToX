@@ -12,7 +12,7 @@ jobs:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build distribution
         run: |
@@ -21,3 +21,11 @@ jobs:
 
       - name: Upload distribution to PyPI
         uses: pypa/gh-action-pypi-publish@v1.13.0
+
+  publish_docs:
+    uses: ./.github/workflows/docs.yml
+    with:
+      publish: true
+      linkcheck: true
+      branch: ${{ github.head_ref == '' && github.ref_name || github.head_ref }}
+    secrets: inherit

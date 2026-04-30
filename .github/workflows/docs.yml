@@ -50,54 +50,27 @@ jobs:
     env:
         ESS_PROTECTED_FILESTORE_USERNAME: ${{ secrets.ESS_PROTECTED_FILESTORE_USERNAME }}
         ESS_PROTECTED_FILESTORE_PASSWORD: ${{ secrets.ESS_PROTECTED_FILESTORE_PASSWORD }}
-        DOCSWORKDIR: ".tox/docs"
+        DOCSWORKDIR: "build/docs"
     steps:
-      # - run: sudo apt install --yes graphviz pandoc
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.branch == '' && github.ref_name || inputs.branch }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0  # history required so cmake can determine version
-      - uses: actions/setup-python@v5
-        with:
-          python-version-file: '.github/workflows/python-version-ci'
-      - uses: mamba-org/setup-micromamba@v2
-        with:
-          init-shell: bash
-          environment-name: mcstas
-          create-args: >-
-            python=3.11
-
-      # Manually building the docs.
-      # We(I) couldn't figure out how we do it with `tox` yet...
       - run: mkdir -p ${DOCSWORKDIR}
-      # - run: python -m pip install -r requirements/ci.txt
-      - run: |
-          which python
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements/docs.txt
-          micromamba install -c conda-forge mcstas=3.5 -y
-        shell: micromamba-shell {0}
-      - run: |
-          mcstas --version
-          python -m sphinx -j2 -v -b html -d ${DOCSWORKDIR}/docs_doctrees docs html
-          python -m sphinx -j2 -v -b doctest -d ${DOCSWORKDIR}/docs_doctrees docs html
-          # tox -e releasedocs -- "${VERSION}"
-          find html -type f -name "*.ipynb" -not -path "html/_sources/*" -delete
-        shell: micromamba-shell {0}
-      # Cleaned up the docs.
-      # - run: tox -e docs
-      #   if: ${{ inputs.version == '' }}
-      # Skipping linkcheck for now, as it is not working properly with the current setup.
-      # - run: tox -e linkcheck
-      #   if: ${{ inputs.linkcheck }}
-      - uses: actions/upload-artifact@v4
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          frozen: true
+          environments: docs
+      - run: pixi run --locked -e docs docs
+      - run: pixi run --locked -e docs linkcheck
+        if: ${{ inputs.linkcheck }}
+      - uses: actions/upload-artifact@v7
         id: artifact-upload-step
         with:
           name: docs_html
-          path: html/
+          path: ${DOCSWORKDIR}
       - run: echo "::notice::https://remote-unzip.deno.dev/${{ github.repository }}/artifacts/${{ steps.artifact-upload-step.outputs.artifact-id }}"
-
       - uses: JamesIves/github-pages-deploy-action@v4.7.3
         if: ${{ inputs.publish }}
         with:
