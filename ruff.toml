@@ -11,14 +11,14 @@ ignore = [
     # Conflict with ruff format, see
     # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
     "COM812", "COM819", "D206", "D300", "E111", "E114", "E117", "ISC001", "ISC002", "Q000", "Q001", "Q002", "Q003", "W191",
+	"C408"  # Calling dict directly is mostly fine since we don't have many repetitivly used apis.
 ]
 fixable = ["B010", "I001", "PT001", "RUF022"]
-isort.known-first-party = ["ess.imaging", "ess.nmx", "ess.reduce"]
 pydocstyle.convention = "numpy"
 
 [lint.per-file-ignores]
 # those files have an increased risk of relying on import order
-"packages/*/tests/*" = [
+"tests/*" = [
     "S101",  # asserts are fine in tests
     "B018",  # 'useless expressions' are ok because some tests just check for exceptions
 ]
