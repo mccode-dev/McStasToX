@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 # General information about the project.
 project = 'McStasToX'
-copyright = '2025 Scipp contributors'
-author = 'Scipp contributors'
+copyright = '2025 mccode contributors'
+author = 'mccode contributors'
 
 html_show_sourcelink = True
 
@@ -145,8 +145,7 @@ html_theme_options = {
         "image_dark": "_static/logo-dark.svg",
     },
     "external_links": [
-        {"name": "Scipp", "url": "https://mccode-dev.github.io"},
-        {"name": "ScippNexus", "url": "https://mccode-dev.github.io/scippnexus"},
+        {"name": "Scipp", "url": "https://scipp.github.io"},
     ],
     "icon_links": [
         {
