@@ -10,9 +10,6 @@ macos = "14.0"
 [tasks]
 test = { cmd = "pytest" }
 
-[tasks.docs]
-cmd = "python -m sphinx -v -b html -d .docs_doctrees docs html"
-
 [dependencies]
 python = "3.12.*"
 
@@ -23,7 +20,7 @@ mcstastox = { path = "./", editable = true, extras = ["scipp", "test"] }
 
 [feature.dev.pypi-dependencies]
 # Matplotlib is buggy for later ipykernel
-ipykernel = "<7"
+# ipykernel = "<7"
 jupyterlab = ">=4.4"
 
 # ==================== Lint feature ====================
@@ -42,9 +39,19 @@ format = "ruff format ."
 [feature.docs.dependencies]
 pandoc = "*"
 python-graphviz = "*"
+mcstas = ">=3.4"
 
 [feature.docs.pypi-dependencies]
 mcstastox = { path = "./", editable = true, extras = ["scipp", "docs"] }
+
+
+[feature.docs.tasks.docs]
+cmd = "python -m sphinx -v -b html -d build/docs_doctrees docs build/html"
+
+
+[feature.docs.tasks.linkcheck]
+description = "Check links in the documentation."
+cmd = "python -m sphinx -j2 -v -b linkcheck -d build/docs_doctrees docs build/html"
 
 # ==================== Environments ====================
 
