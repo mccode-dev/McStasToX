@@ -1,0 +1,63 @@
+[workspace]
+name = "McStasToX"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[system-requirements]
+# Scipp does not support older OSX versions.
+macos = "14.0"
+
+[tasks]
+test = { cmd = "pytest" }
+
+[tasks.docs-esssans]
+cmd = "python -m sphinx -v -b html -d packages/esssans/.docs_doctrees packages/esssans/docs packages/esssans/html"
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+mcstastox = { path = "./", editable = true, extras = ["scipp", "test"] }
+
+# ==================== Dev feature ====================
+
+[feature.dev.pypi-dependencies]
+# Matplotlib is buggy for later ipykernel
+ipykernel = "<7"
+jupyterlab = ">=4.4"
+
+# ==================== Lint feature ====================
+
+[feature.lint.pypi-dependencies]
+pre-commit = "*"
+ruff = ">=0.15"
+
+[feature.lint.tasks]
+lint = "pre-commit run --all-files"
+check = "ruff check ."
+format = "ruff format ."
+
+# ==================== Docs feature ====================
+
+[feature.docs.dependencies]
+pandoc = "*"
+python-graphviz = "*"
+
+[feature.docs.pypi-dependencies]
+mcstastox = { path = "./", editable = true, extras = ["scipp", "docs"] }
+
+# ==================== Environments ====================
+
+[environments]
+# Default: all hard dependencies, test dependencies and jupyter/ipykernel packages.
+default = { features = ["dev"], solve-group = "default" }
+
+# Lower bound environment.
+lb-default = { features = ["dev"], solve-group = "lower-bound" }
+
+# Docs environments (package with docs extra + pandoc)
+docs= { features = ["docs"], solve-group = "default" }
+
+# Lint environment (standalone, no package deps)
+lint = { features = ["lint"], solve-group = "lint" }
+
