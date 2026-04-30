@@ -50,7 +50,6 @@ jobs:
     env:
         ESS_PROTECTED_FILESTORE_USERNAME: ${{ secrets.ESS_PROTECTED_FILESTORE_USERNAME }}
         ESS_PROTECTED_FILESTORE_PASSWORD: ${{ secrets.ESS_PROTECTED_FILESTORE_PASSWORD }}
-        DOCSWORKDIR: "build/docs"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -63,7 +62,7 @@ jobs:
           frozen: true
           environments: docs
       - run: pixi run --locked -e docs docs
-      - run: pixi run --locked -e docs linkcheck
+      - run: pixi run --frozen -e docs linkcheck
         if: ${{ inputs.linkcheck }}
       - uses: actions/upload-artifact@v7
         id: artifact-upload-step
@@ -71,9 +70,9 @@ jobs:
           name: docs_html
           path: build/html/
       - run: echo "::notice::https://remote-unzip.deno.dev/${{ github.repository }}/artifacts/${{ steps.artifact-upload-step.outputs.artifact-id }}"
-      - uses: JamesIves/github-pages-deploy-action@v4.7.3
+      - uses: JamesIves/github-pages-deploy-action@v4.8.0
         if: ${{ inputs.publish }}
         with:
           branch: gh-pages
-          folder: html
+          folder: build/html
           single-commit: true
