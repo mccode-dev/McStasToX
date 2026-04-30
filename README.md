@@ -1,6 +1,6 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 [![PyPI badge](http://img.shields.io/pypi/v/mcstastox.svg)](https://pypi.python.org/pypi/mcstastox)
-[![Anaconda-Server Badge](https://anaconda.org/mccode-dev/mcstastox/badges/version.svg)](https://anaconda.org/mccode-dev/mcstastox)
+[![Conda Forge Badge](https://img.shields.io/conda/v/conda-forge/mcstastox)](https://prefix.dev/channels/conda-forge/packages/mcstastox)
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 # McStasToX
