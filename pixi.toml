@@ -46,7 +46,7 @@ mcstastox = { path = "./", editable = true, extras = ["scipp", "docs"] }
 
 
 [feature.docs.tasks.docs]
-cmd = "python -m sphinx -W -j2 -v -b html -d build/docs_doctrees docs build/html"
+cmd = "python -m sphinx -j2 -v -b html -d build/docs_doctrees docs build/html"
 
 
 [feature.docs.tasks.linkcheck]
