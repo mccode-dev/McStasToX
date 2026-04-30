@@ -12,5 +12,4 @@ maxdepth: 2
 
 getting-started
 coding-conventions
-dependency-management
 ```
