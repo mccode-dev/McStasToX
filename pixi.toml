@@ -10,8 +10,8 @@ macos = "14.0"
 [tasks]
 test = { cmd = "pytest" }
 
-[tasks.docs-esssans]
-cmd = "python -m sphinx -v -b html -d packages/esssans/.docs_doctrees packages/esssans/docs packages/esssans/html"
+[tasks.docs]
+cmd = "python -m sphinx -v -b html -d .docs_doctrees docs html"
 
 [dependencies]
 python = "3.12.*"

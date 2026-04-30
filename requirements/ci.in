@@ -1,4 +1,0 @@
-gitpython>3.1.47 # command injection vulnerability patch
-packaging
-requests
-tox
