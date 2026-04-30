@@ -57,7 +57,7 @@ jobs:
           ref: ${{ inputs.branch == '' && github.ref_name || inputs.branch }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0  # history required so cmake can determine version
-      - run: mkdir -p ${DOCSWORKDIR}
+      - run: mkdir -p build/html/
       - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           frozen: true
@@ -69,7 +69,7 @@ jobs:
         id: artifact-upload-step
         with:
           name: docs_html
-          path: ${DOCSWORKDIR}
+          path: build/html/
       - run: echo "::notice::https://remote-unzip.deno.dev/${{ github.repository }}/artifacts/${{ steps.artifact-upload-step.outputs.artifact-id }}"
       - uses: JamesIves/github-pages-deploy-action@v4.7.3
         if: ${{ inputs.publish }}
