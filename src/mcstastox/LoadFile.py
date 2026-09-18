@@ -9,6 +9,13 @@ import numpy as np
 from .ReadNeXus import McStasNeXus
 
 
+class Variable:
+    def __init__(self, coord_name, variable_name, unit):
+        self.coord_name = coord_name
+        self.variable_name = variable_name
+        self.unit = unit
+
+
 class Data:
     """
     Interface class, with context handler, loads data using McStasNeXus data class
@@ -518,15 +525,26 @@ class Data:
 
         # todo: Make as generator to work in chunks
 
-        variables = ["p", "t", "id"]
+        base_variables = ["p", "id"] # requires special care
+        variables = [
+            Variable(coord_name="t", variable_name="t", unit="s"),
+        ]
+
         if extra_variables is not None:
             if not isinstance(extra_variables, list):
                 extra_variables = [extra_variables]
             # Default is to gather weight, time and id
             variables += extra_variables
 
+        load_variables = base_variables
+        for variable in variables:
+            if not isinstance(variable, Variable):
+                raise TypeError("Use Variable class to add extra variables.")
+
+            load_variables.append(variable.variable_name)
+
         event_data = self.get_event_data(
-            variables=variables,
+            variables=load_variables,
             component_name=component_name,
             filter_zeros=filter_zeros,
         )
@@ -542,11 +560,15 @@ class Data:
                 'pixel_id': sc.array(
                     dims=['events'], values=event_data["id"].astype(int)
                 ),
-                't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
+                #'t': sc.array(dims=['events'], unit='s', values=event_data["t"]),
                 'source_position': sc.vector(source_pos, unit='m'),
                 'sample_position': sc.vector(sample_pos, unit='m'),
             },
         )
+        for variable in variables:
+            events.coords[variable.coord_name] = sc.array(dims=["events"],
+                                                          unit=variable.unit,
+                                                          values=event_data[variable.variable_name])
 
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(
