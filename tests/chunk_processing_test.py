@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from mcstastox import SamplingSettings
-from mcstastox.LoadFile import Data, Variable
+from mcstastox.LoadFile import Data, Transfer
 
 FIXTURE = Path(__file__).parents[1] / "docs" / "user-guide" / "test_12"
 
@@ -47,7 +47,7 @@ def test_get_event_data_chunking_matches_full_read():
 
 @pytest.mark.parametrize("chunk_size", [1, 7, 10000])
 def test_simple_export_chunking_matches_full_export(chunk_size):
-    extra = Variable("wavelength", "L", "angstrom")
+    extra = Transfer("L", "wavelength", "angstrom")
     with Data(FIXTURE) as data:
         full = data.export_scipp_simple(
             "source",

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
+# ruff: noqa: T201
 import os
-import sys
 
 import h5py
 import numpy as np
@@ -12,53 +12,55 @@ from .Sampling import sample_event_chunks
 _DEFAULT_SAMPLING_CHUNK_SIZE = 100_000
 
 
-class Variable:
+class Transfer:
     """
-    Additional event variable to load and export as a scipp coordinate
+    Transfer an event variable from McStas to a scipp coordinate.
 
+    :param mcstas_name: Name of the variable in the McStas event data, see
+                        ``Data.get_component_variables``
     :param coord_name: Name of the scipp coordinate to create
-    :param variable_name: Name of the variable in the McStas event data,
-                          see ``Data.get_component_variables``
     :param unit: Unit of the variable as a scipp unit string, e.g. ``"s"``
     """
 
-    def __init__(self, coord_name: str, variable_name: str, unit: str):
+    def __init__(self, mcstas_name: str, coord_name: str, unit: str | None = None):
         for name, value in (
+            ("mcstas_name", mcstas_name),
             ("coord_name", coord_name),
-            ("variable_name", variable_name),
             ("unit", unit),
         ):
+            if name == "unit" and value is None:
+                continue
             if not isinstance(value, str):
-                raise TypeError(f"Variable {name} must be a string.")
+                raise TypeError(f"Transfer {name} must be a string.")
             if not value:
-                raise ValueError(f"Variable {name} must not be empty.")
+                raise ValueError(f"Transfer {name} must not be empty.")
+        self.mcstas_name = mcstas_name
         self.coord_name = coord_name
-        self.variable_name = variable_name
         self.unit = unit
 
     def __repr__(self) -> str:
         return (
-            f"Variable(coord_name={self.coord_name!r}, "
-            f"variable_name={self.variable_name!r}, unit={self.unit!r})"
+            f"Transfer(mcstas_name={self.mcstas_name!r}, "
+            f"coord_name={self.coord_name!r}, unit={self.unit!r})"
         )
 
 
-def _prepare_extra_variables(extra_variables) -> list[Variable]:
+def _prepare_transfers(extra_variables) -> list[Transfer]:
     """
-    Normalizes extra_variables to a list of Variable instances
+    Normalizes extra_variables to a list of Transfer instances.
 
-    :param extra_variables: None, a single Variable or a list of Variables
-    :return: list of Variables, empty if None was given
+    :param extra_variables: None, a single Transfer or a list of Transfers
+    :return: list of Transfers, empty if None was given
     """
     if extra_variables is None:
         return []
-    if isinstance(extra_variables, Variable):
+    if isinstance(extra_variables, Transfer):
         return [extra_variables]
     if not isinstance(extra_variables, list) or any(
-        not isinstance(variable, Variable) for variable in extra_variables
+        not isinstance(transfer, Transfer) for transfer in extra_variables
     ):
         raise TypeError(
-            "extra_variables must be a Variable or a list of Variables, "
+            "extra_variables must be a Transfer or a list of Transfers, "
             f"got {type(extra_variables).__name__}."
         )
     return extra_variables
@@ -125,10 +127,10 @@ class Data:
         """
         Show all components
         """
-        sys.stdout.write("All components in file:\n")
+        print("All components in file:")
         comps = self.get_components()
         for comp in comps:
-            sys.stdout.write(f"{comp}\n")
+            print(comp)
 
     def show_components_with_data(self):
         """
@@ -136,11 +138,11 @@ class Data:
         """
         comps = self.get_components_with_data()
         if len(comps) == 0:
-            sys.stdout.write("No components with data in file:\n")
+            print("No components with data in file:")
         else:
-            sys.stdout.write("All components with data in file:\n")
+            print("All components with data in file:")
             for comp in comps:
-                sys.stdout.write(f"{comp}\n")
+                print(comp)
 
     def show_components_with_ids(self):
         """
@@ -148,11 +150,11 @@ class Data:
         """
         comps = self.get_components_with_ids()
         if len(comps) == 0:
-            sys.stdout.write("No components with pixel id information in file:\n")
+            print("No components with pixel id information in file:")
         else:
-            sys.stdout.write("All components with pixel id information in file:\n")
+            print("All components with pixel id information in file:")
             for comp in comps:
-                sys.stdout.write(f"{comp}\n")
+                print(comp)
 
     def show_components_with_geometry(self):
         """
@@ -160,11 +162,11 @@ class Data:
         """
         comps = self.get_components_with_geometry()
         if len(comps) == 0:
-            sys.stdout.write("No components with geometry information in file:\n")
+            print("No components with geometry information in file:")
         else:
-            sys.stdout.write("All components with geometry information in file:\n")
+            print("All components with geometry information in file:")
             for comp in comps:
-                sys.stdout.write(f"{comp}\n")
+                print(comp)
 
     def get_component_variables(self, component_name):
         """
@@ -541,11 +543,11 @@ class Data:
             ),
             coords=coords,
         )
-        for variable in extra_variables:
-            events.coords[variable.coord_name] = sc.array(
+        for transfer in extra_variables:
+            events.coords[transfer.coord_name] = sc.array(
                 dims=["events"],
-                unit=variable.unit,
-                values=event_data[variable.variable_name],
+                unit=transfer.unit,
+                values=event_data[transfer.mcstas_name],
             )
         return events
 
@@ -660,7 +662,7 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: A Variable or list of Variables with
+        :param extra_variables: A Transfer or list of Transfers with
                                   additional event data to include as
                                   scipp coordinates
         :param chunk_size: optional positive number of events to read at a time
@@ -677,8 +679,8 @@ class Data:
 
         # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-        extra_variables = _prepare_extra_variables(extra_variables)
-        variables += [variable.variable_name for variable in extra_variables]
+        extra_variables = _prepare_transfers(extra_variables)
+        variables += [transfer.mcstas_name for transfer in extra_variables]
 
         return self._build_scipp_events(
             sc=sc,
@@ -712,7 +714,7 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: A Variable or list of Variables with
+        :param extra_variables: A Transfer or list of Transfers with
                                   additional event data to include as
                                   scipp coordinates
         :param chunk_size: optional positive number of events to read at a time
@@ -729,8 +731,8 @@ class Data:
 
         # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-        extra_variables = _prepare_extra_variables(extra_variables)
-        variables += [variable.variable_name for variable in extra_variables]
+        extra_variables = _prepare_transfers(extra_variables)
+        variables += [transfer.mcstas_name for transfer in extra_variables]
 
         events = self._build_scipp_events(
             sc=sc,
