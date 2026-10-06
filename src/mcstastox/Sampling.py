@@ -76,9 +76,15 @@ class SamplingSettings:
 class SampledEventData(dict[str, np.ndarray]):
     """Sampled event arrays and the total weight of the input stream."""
 
-    def __init__(self, event_data: dict[str, np.ndarray], total_weight: float):
+    def __init__(
+        self,
+        event_data: dict[str, np.ndarray],
+        total_weight: float,
+        total_weight_variance: float,
+    ):
         super().__init__(event_data)
         self.total_weight = total_weight
+        self.total_weight_variance = total_weight_variance
 
     @property
     def effective_duration(self) -> float | None:
@@ -92,6 +98,14 @@ class SampledEventData(dict[str, np.ndarray]):
             return None
         return n_events / self.total_weight
 
+    @property
+    def effective_duration_variance(self) -> float | None:
+        """Return the propagated variance of :attr:`effective_duration`."""
+        duration = self.effective_duration
+        if duration is None:
+            return None
+        return duration**2 * self.total_weight_variance / self.total_weight**2
+
 
 class _WeightedEventSampler:
     """Weighted reservoir sampler for dictionaries of event arrays."""
@@ -101,6 +115,7 @@ class _WeightedEventSampler:
         self._rng = np.random.default_rng(settings.seed)
         self._ordered = settings.ordered
         self._total_weight = 0.0
+        self._total_weight_variance = 0.0
         self._skip_weight = 0.0
         self._seen_events = 0
         self._reservoir: dict[str, np.ndarray] | None = None
@@ -159,6 +174,9 @@ class _WeightedEventSampler:
             positive_weights = weights[positive].astype(np.float64, copy=False)
             cumulative = np.cumsum(positive_weights, dtype=np.float64)
             previous_weight = self._total_weight
+            self._total_weight_variance += float(
+                np.dot(positive_weights, positive_weights)
+            )
 
             for offset, index in enumerate(positive):
                 event_weight = float(positive_weights[offset])
@@ -180,19 +198,20 @@ class _WeightedEventSampler:
     def result(self) -> SampledEventData:
         """Return sampled event arrays with unit weights."""
         if self._reservoir is None or self._keys is None:
-            return SampledEventData({}, self._total_weight)
+            return SampledEventData({}, self._total_weight, self._total_weight_variance)
 
         result = {key: values.copy() for key, values in self._reservoir.items()}
         if not self._has_samples:
             return SampledEventData(
                 {key: values[:0] for key, values in result.items()},
                 self._total_weight,
+                self._total_weight_variance,
             )
         if self._positions is not None:
             order = np.argsort(self._positions, kind="stable")
             result = {key: values[order] for key, values in result.items()}
         result["p"] = np.ones(self._n_samples, dtype=np.float64)
-        return SampledEventData(result, self._total_weight)
+        return SampledEventData(result, self._total_weight, self._total_weight_variance)
 
 
 def sample_event_chunks(

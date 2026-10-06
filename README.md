@@ -86,4 +86,5 @@ Sampling is weighted by the original event probabilities, allows repeated
 events, and sets every sampled event weight to one. Set `ordered=True` to keep
 the order of the input event stream. The sampled scipp object also contains a
 scalar `effective_duration` coordinate. When the input weights are detector
-count rates, this is `n_samples / sum(p)` in seconds.
+count rates, this is `n_samples / sum(p)` in seconds. Its Scipp variance is
+propagated from the McStas weight variance `sum(p**2)`.

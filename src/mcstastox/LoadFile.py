@@ -596,7 +596,9 @@ class Data:
             )
             if sampled_event_data.effective_duration is not None:
                 events.coords["effective_duration"] = sc.scalar(
-                    sampled_event_data.effective_duration, unit="s"
+                    sampled_event_data.effective_duration,
+                    variance=sampled_event_data.effective_duration_variance,
+                    unit="s",
                 )
             return events
 

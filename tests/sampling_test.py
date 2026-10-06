@@ -23,7 +23,9 @@ def test_sampling_is_weighted_and_returns_unit_weights():
     np.testing.assert_array_equal(result["p"], np.ones(1000))
     assert 0.65 < np.mean(result["id"] == 20) < 0.85
     assert result.total_weight == 4.0
+    assert result.total_weight_variance == 10.0
     assert result.effective_duration == 250.0
+    assert result.effective_duration_variance == 39062.5
 
 
 def test_sampling_handles_chunks_and_ordering():
