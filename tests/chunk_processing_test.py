@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pytest
 
-from mcstastox.LoadFile import Data, Variable
+from mcstastox.LoadFile import Data, Transfer
 
 
 def _write_event_component(components, index, name, pixel_ids, position, events):
@@ -109,7 +109,7 @@ def test_event_iterator_matches_full_read(nexus_fixture):
 
 @pytest.mark.parametrize("chunk_size", [1, 7, 10000])
 def test_simple_export_chunking_matches_full_export(chunk_size, nexus_fixture):
-    extra = Variable("wavelength", "L", "angstrom")
+    extra = Transfer("L", "wavelength", "angstrom")
     with Data(nexus_fixture) as data:
         full = data.export_scipp_simple(
             "source",

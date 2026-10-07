@@ -11,7 +11,7 @@ import pytest
 import scipp as sc
 
 import mcstastox
-from mcstastox.LoadFile import Data, Variable
+from mcstastox.LoadFile import Data, Transfer
 
 N_EVENTS = 3
 
@@ -48,15 +48,20 @@ def _flatten_binned(array):
     return np.concatenate([np.asarray(value.values) for value in array.values])
 
 
-def test_variable_construction():
-    variable = Variable(coord_name="energy", variable_name="lambda", unit="eV")
-    assert variable.coord_name == "energy"
-    assert variable.variable_name == "lambda"
-    assert variable.unit == "eV"
+def test_transfer_construction():
+    transfer = Transfer(mcstas_variable="lambda", scipp_coord="energy", unit="eV")
+    assert transfer.mcstas_variable == "lambda"
+    assert transfer.scipp_coord == "energy"
+    assert transfer.unit == "eV"
 
 
-def test_variable_exported_from_package_top_level():
-    assert mcstastox.Variable is Variable
+def test_transfer_defaults_to_no_unit():
+    transfer = Transfer(mcstas_variable="lambda", scipp_coord="energy")
+    assert transfer.unit is None
+
+
+def test_transfer_exported_from_package_top_level():
+    assert mcstastox.Transfer is Transfer
 
 
 def test_show_components_with_geometry_prints_once(capsys):
@@ -66,34 +71,34 @@ def test_show_components_with_geometry_prints_once(capsys):
     data.show_components_with_geometry()
 
     assert capsys.readouterr().out == (
-        "All components with geometry information in file:\n" "Square_1\n" "Banana_1\n"
+        "All components with geometry information in file:\nSquare_1\nBanana_1\n"
     )
 
 
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"coord_name": 5, "variable_name": "L", "unit": "angstrom"},
-        {"coord_name": "energy", "variable_name": None, "unit": "angstrom"},
-        {"coord_name": "energy", "variable_name": "L", "unit": 3.0},
+        {"mcstas_variable": 5, "scipp_coord": "L", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": None, "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "energy", "unit": 3.0},
     ],
 )
-def test_variable_rejects_non_string_fields(kwargs):
+def test_transfer_rejects_non_string_fields(kwargs):
     with pytest.raises(TypeError):
-        Variable(**kwargs)
+        Transfer(**kwargs)
 
 
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"coord_name": "", "variable_name": "L", "unit": "angstrom"},
-        {"coord_name": "energy", "variable_name": "", "unit": "angstrom"},
-        {"coord_name": "energy", "variable_name": "L", "unit": ""},
+        {"mcstas_variable": "", "scipp_coord": "L", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "energy", "unit": ""},
     ],
 )
-def test_variable_rejects_empty_fields(kwargs):
+def test_transfer_rejects_empty_fields(kwargs):
     with pytest.raises(ValueError, match="must not be empty"):
-        Variable(**kwargs)
+        Transfer(**kwargs)
 
 
 def test_export_scipp_simple_keeps_standard_behavior():
@@ -117,8 +122,10 @@ def test_export_scipp_simple_extra_variables():
         source_name="source",
         sample_name="sample_position",
         extra_variables=[
-            Variable(coord_name="sim_wavelength", variable_name="L", unit="angstrom"),
-            Variable(coord_name="x", variable_name="x", unit="m"),
+            Transfer(
+                mcstas_variable="L", scipp_coord="sim_wavelength", unit="angstrom"
+            ),
+            Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         ],
     )
     assert state["requested_variables"] == ["p", "t", "id", "L", "x"]
@@ -135,9 +142,7 @@ def test_export_scipp_simple_single_variable():
     events = data.export_scipp_simple(
         source_name="source",
         sample_name="sample_position",
-        extra_variables=Variable(
-            coord_name="sim_wavelength", variable_name="L", unit="angstrom"
-        ),
+        extra_variables=Transfer(mcstas_variable="L", scipp_coord="sim_wavelength"),
     )
     assert state["requested_variables"] == ["p", "t", "id", "L"]
     np.testing.assert_array_equal(
@@ -165,8 +170,10 @@ def test_export_scipp_extra_variables():
         source_name="source",
         sample_name="sample_position",
         extra_variables=[
-            Variable(coord_name="sim_wavelength", variable_name="L", unit="angstrom"),
-            Variable(coord_name="x", variable_name="x", unit="m"),
+            Transfer(
+                mcstas_variable="L", scipp_coord="sim_wavelength", unit="angstrom"
+            ),
+            Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         ],
     )
     assert state["requested_variables"] == ["p", "t", "id", "L", "x"]
@@ -204,7 +211,7 @@ def test_extra_variables_rejects_invalid_input(extra_variables):
 def test_extra_variables_rejects_list_with_invalid_entry():
     data, _ = _make_data()
     invalid_list = [
-        Variable(coord_name="x", variable_name="x", unit="m"),
+        Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         "L",
     ]
     with pytest.raises(TypeError):

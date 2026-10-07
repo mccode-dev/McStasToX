@@ -12,4 +12,4 @@ except importlib.metadata.PackageNotFoundError:
 del importlib
 
 from .LoadFile import Data as Read
-from .LoadFile import Variable
+from .LoadFile import Transfer
