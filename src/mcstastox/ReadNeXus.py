@@ -582,7 +582,8 @@ class McStasNeXus:
         variables = self.get_component_variables(component_name)
         return variables.split(" ").index(variable)
 
-    def _get_event_components(self, component_name):
+    def _get_event_components_with_ids(self, component_name):
+        """Normalize event components, defaulting to components with pixel IDs."""
         if component_name is None:
             return self.get_components_with_ids()
         if not isinstance(component_name, list):
@@ -618,7 +619,7 @@ class McStasNeXus:
             missing from a component.
         """
         _validate_chunk_size(chunk_size, allow_none=False)
-        components_with_ids = self._get_event_components(component_name)
+        components_with_ids = self._get_event_components_with_ids(component_name)
 
         for comp in components_with_ids:
             comp_variables = self.get_component_variables(comp)
@@ -644,7 +645,7 @@ class McStasNeXus:
                  for given component name (list of names allowed)
         """
 
-        components_with_ids = self._get_event_components(component_name)
+        components_with_ids = self._get_event_components_with_ids(component_name)
         total_length = sum(
             self.get_component_n_events(comp) for comp in components_with_ids
         )
