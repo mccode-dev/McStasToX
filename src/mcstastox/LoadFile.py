@@ -173,7 +173,7 @@ class Data:
         """Yield filtered event data without assembling the complete event set."""
         _validate_chunk_size(chunk_size)
         for event_data in self.file_object.iter_event_data(
-            variables, component_name, chunk_size
+            variables, component_name=component_name, chunk_size=chunk_size
         ):
             if "p" in variables and filter_zeros:
                 nonzero = event_data["p"] != 0
@@ -184,9 +184,7 @@ class Data:
                     continue
             yield event_data
 
-    def get_event_data(
-        self, variables, component_name=None, filter_zeros=True, *, chunk_size=None
-    ):
+    def get_event_data(self, variables, component_name=None, filter_zeros=True):
         """
         Provides event data with requested variables as dictionaries
 
@@ -194,22 +192,8 @@ class Data:
         :param component_name: optional, single component name or list of names
         :param filter_zeros: bool: Set to True if entries with 0 weights
                                    should be removed
-        :param chunk_size: optional positive number of events to read at a time
         :return: dictionary with keys named after variables and numpy arrays as values
         """
-
-        _validate_chunk_size(chunk_size)
-        if chunk_size is not None:
-            chunks = {var: [] for var in variables}
-            for event_data in self._iter_event_chunks(
-                variables, component_name, chunk_size, filter_zeros
-            ):
-                for var in variables:
-                    chunks[var].append(event_data[var])
-            return {
-                var: np.concatenate(values) if values else np.empty(0)
-                for var, values in chunks.items()
-            }
 
         event_data = self.file_object.get_event_data(
             variables=variables, component_name=component_name
@@ -628,7 +612,6 @@ class Data:
         :param extra_variables: A Variable or list of Variables with
                                  additional event data to include as
                                  scipp coordinates
-        :param chunk_size: optional positive number of events to read at a time
         :return: scipp object
         """
         try:
@@ -676,7 +659,6 @@ class Data:
         :param extra_variables: A Variable or list of Variables with
                                  additional event data to include as
                                  scipp coordinates
-        :param chunk_size: optional positive number of events to read at a time
         :return: scipp DataGroup with events, positions, bank_ids and bank_names
         """
         try:

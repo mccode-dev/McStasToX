@@ -18,30 +18,24 @@ def _flatten_binned(array):
     return np.concatenate(values) if values else np.empty(0)
 
 
-def test_get_event_data_chunking_matches_full_read():
+def test_event_iterator_matches_full_read():
+    variables = ["p", "t", "id", "L"]
     with Data(FIXTURE) as data:
         full = data.get_event_data(
-            ["p", "t", "id", "L"],
+            variables,
             component_name="Square_1",
             filter_zeros=False,
         )
-        chunked = data.get_event_data(
-            ["p", "t", "id", "L"],
-            component_name="Square_1",
-            filter_zeros=False,
-            chunk_size=7,
-        )
-        nexus_full = data.file_object.get_event_data(
-            ["p", "t", "id"], component_name="Square_1"
-        )
-        nexus_chunked = data.file_object.get_event_data(
-            ["p", "t", "id"], component_name="Square_1", chunk_size=7
-        )
+        chunks = {var: [] for var in variables}
+        for event_data in data.file_object.iter_event_data(
+            variables, component_name="Square_1", chunk_size=7
+        ):
+            for var in variables:
+                chunks[var].append(event_data[var])
 
-    for variable in full:
-        np.testing.assert_array_equal(chunked[variable], full[variable])
-    for variable in nexus_full:
-        np.testing.assert_array_equal(nexus_chunked[variable], nexus_full[variable])
+    for variable in variables:
+        iterated = np.concatenate(chunks[variable])
+        np.testing.assert_array_equal(iterated, full[variable])
 
 
 @pytest.mark.parametrize("chunk_size", [1, 7, 10000])
@@ -100,15 +94,24 @@ def test_grouped_export_chunking_matches_full_export(filter_zeros):
     )
 
 
-def test_chunking_supports_multiple_components():
+def test_event_iterator_defaults_to_all_components():
+    variables = ["p", "t", "id"]
     with Data(FIXTURE) as data:
-        full = data.get_event_data(["p", "t", "id"], filter_zeros=False)
-        chunked = data.get_event_data(
-            ["p", "t", "id"], filter_zeros=False, chunk_size=7
-        )
+        full = data.file_object.get_event_data(variables)
+        chunks = {var: [] for var in variables}
+        for event_data in data.file_object.iter_event_data(variables, chunk_size=7):
+            for var in variables:
+                chunks[var].append(event_data[var])
 
-    for variable in full:
-        np.testing.assert_array_equal(chunked[variable], full[variable])
+    for variable in variables:
+        iterated = np.concatenate(chunks[variable])
+        np.testing.assert_array_equal(iterated, full[variable])
+
+
+def test_event_iterator_requires_chunk_size():
+    with Data(FIXTURE) as data:
+        with pytest.raises(TypeError, match="chunk_size"):
+            data.file_object.iter_event_data(["p"])
 
 
 def test_simple_export_chunking_handles_empty_result():
@@ -126,8 +129,8 @@ def test_simple_export_chunking_handles_empty_result():
     assert events.sizes["events"] == 0
 
 
-@pytest.mark.parametrize("chunk_size", [0, -1, 1.5, True, "4"])
+@pytest.mark.parametrize("chunk_size", [None, 0, -1, 1.5, True, "4"])
 def test_chunk_size_must_be_positive_integer(chunk_size):
     with Data(FIXTURE) as data:
         with pytest.raises((TypeError, ValueError)):
-            data.get_event_data(["p"], chunk_size=chunk_size)
+            list(data.file_object.iter_event_data(["p"], chunk_size=chunk_size))
