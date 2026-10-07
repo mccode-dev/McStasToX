@@ -76,3 +76,13 @@ def test_sampling_rejects_negative_weights():
             [{"p": np.array([1.0, -1.0]), "id": np.array([1, 2])}],
             SamplingSettings(n_samples=2),
         )
+
+
+def test_sampling_rejects_event_chunk_without_weights():
+    with pytest.raises(
+        ValueError, match="Event chunk 0 must contain a 'p' array of event weights"
+    ):
+        sample_event_chunks(
+            [{"id": np.array([1, 2])}],
+            SamplingSettings(n_samples=2),
+        )

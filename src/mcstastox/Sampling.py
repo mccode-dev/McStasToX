@@ -74,7 +74,33 @@ class SamplingSettings:
 
 
 class SampledEventData(dict[str, np.ndarray]):
-    """Sampled event arrays and the total weight of the input stream."""
+    """Sampled event arrays and metadata from the input event stream.
+
+    The mapping is keyed by event-variable names and contains one-dimensional
+    NumPy arrays. All arrays have the same length, and values at the same array
+    index belong to the same event. The keys are not limited to a fixed set:
+    normal McStas event data commonly contains ``"p"``, ``"t"``, and ``"id"``,
+    while any requested extra event variables are retained under their original
+    names.
+
+    For a non-empty result produced by :func:`sample_event_chunks`, ``"p"``
+    contains unit weights. The sampler requires ``"p"`` in each input chunk,
+    but an empty input stream produces an empty mapping, and an input stream
+    with no positive weights produces empty arrays.
+
+    ``total_weight`` and ``total_weight_variance`` are metadata attributes, not
+    entries in the mapping. The latter is the sum of squared input weights and
+    is used when propagating the uncertainty of the effective duration.
+
+    :param event_data: Event-variable names mapped to aligned NumPy arrays.
+    :param total_weight: Sum of the input event weights.
+    :param total_weight_variance: Sum of squared input event weights.
+
+    The object behaves like a regular dictionary, so event arrays can be
+    accessed with expressions such as ``sampled["id"]``. The
+    :attr:`effective_duration` and :attr:`effective_duration_variance`
+    properties expose derived metadata for count-rate input data.
+    """
 
     def __init__(
         self,
@@ -150,9 +176,6 @@ class _WeightedEventSampler:
 
     def add(self, event_data: dict[str, np.ndarray]) -> None:
         """Consume one chunk of event data."""
-        if "p" not in event_data:
-            raise ValueError("Sampled event data must contain a 'p' weight array")
-
         arrays = {key: np.asarray(values) for key, values in event_data.items()}
         weights = arrays["p"]
         if weights.ndim != 1:
@@ -225,12 +248,17 @@ def sample_event_chunks(
 
     :param event_chunks: Iterable of event dictionaries
     :param settings: Sampling configuration
-    :return: sampled event data with unit ``p`` values and input weight metadata
+    :return: a :class:`SampledEventData` with unit ``p`` values and input
+        weight metadata
     """
     if not isinstance(settings, SamplingSettings):
         raise TypeError("settings must be a SamplingSettings instance")
 
     sampler = _WeightedEventSampler(settings)
-    for event_data in event_chunks:
+    for chunk_index, event_data in enumerate(event_chunks):
+        if "p" not in event_data:
+            raise ValueError(
+                f"Event chunk {chunk_index} must contain a 'p' array of event weights"
+            )
         sampler.add(event_data)
     return sampler.result()
