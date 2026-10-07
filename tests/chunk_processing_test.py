@@ -36,12 +36,13 @@ def _write_event_component(components, index, name, pixel_ids, position, events)
     event_data.create_dataset("events", data=events)
 
 
-def _write_fixture(file_path):
+def _write_fixture(file_path, events=None):
     pixel_ids = np.arange(12, dtype=int)
-    weights = np.array([0.0, *np.ones(11)])
-    times = np.arange(12, dtype=float)
-    wavelengths = np.linspace(1.0, 2.0, 12)
-    events = np.column_stack((weights, times, pixel_ids, wavelengths))
+    if events is None:
+        weights = np.array([0.0, *np.ones(11)])
+        times = np.arange(12, dtype=float)
+        wavelengths = np.linspace(1.0, 2.0, 12)
+        events = np.column_stack((weights, times, pixel_ids, wavelengths))
 
     with h5py.File(file_path, "w") as file_handle:
         entry = file_handle.create_group("entry1")
@@ -79,6 +80,12 @@ def nexus_fixture(tmp_path_factory):
     data_folder = tmp_path_factory.mktemp("nexus")
     _write_fixture(data_folder / "mccode.h5")
     return data_folder
+
+
+@pytest.fixture
+def empty_nexus_fixture(tmp_path):
+    _write_fixture(tmp_path / "mccode.h5", events=np.empty((0, 4)))
+    return tmp_path
 
 
 def _flatten_binned(array):
@@ -183,17 +190,11 @@ def test_event_iterator_requires_chunk_size(nexus_fixture):
             data.file_object.iter_event_data(["p"])
 
 
-def test_simple_export_chunking_handles_empty_result():
-    data = Data.__new__(Data)
-    data.component_pixel_order = ["Square_1"]
-    data.pixel_range = {"Square_1": [0, 0]}
-    data._iter_event_chunks = lambda *args: iter(())
-    data.get_id_to_global_coordinates = lambda component_name=None: np.zeros((1, 3))
-    data.get_global_component_coordinates = lambda component_name: np.zeros(3)
-
-    events = data.export_scipp_simple(
-        "source", "sample", component_name="Square_1", chunk_size=2
-    )
+def test_simple_export_chunking_handles_empty_result(empty_nexus_fixture):
+    with Data(empty_nexus_fixture) as data:
+        events = data.export_scipp_simple(
+            "source", "sample_position", component_name="Square_1", chunk_size=2
+        )
 
     assert events.sizes["events"] == 0
 
