@@ -9,6 +9,15 @@ import h5py
 import numpy as np
 
 
+def _validate_chunk_size(chunk_size: int | None) -> None:
+    if chunk_size is None:
+        return
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, (int, np.integer)):
+        raise TypeError("chunk_size must be a positive integer or None")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be a positive integer")
+
+
 @dataclass(frozen=True)
 class McStasVersionSetting:
     component_numbers: int | None = None
@@ -472,7 +481,7 @@ class McStasNeXus:
 
         return info_entry["events"].shape[0]
 
-    def get_component_events_array(self, component_name):
+    def get_component_events_array(self, component_name, start=None, stop=None):
         """
         :return: get event array from component with event data
         """
@@ -484,7 +493,10 @@ class McStasNeXus:
                 f"The component '{component_name}' does not have events entry."
             )
 
-        return np.asarray(info_entry["events"])
+        events = info_entry["events"]
+        if start is None and stop is None:
+            return np.asarray(events)
+        return np.asarray(events[slice(start, stop)])
 
     def get_component_parameter_entry(self, component_name):
         """
@@ -568,11 +580,55 @@ class McStasNeXus:
         variables = self.get_component_variables(component_name)
         return variables.split(" ").index(variable)
 
-    def get_event_data(self, variables, component_name=None):
+    def iter_event_data(self, variables, component_name=None, chunk_size=None):
+        """Yield requested event data in bounded chunks."""
+        _validate_chunk_size(chunk_size)
+        if chunk_size is None:
+            raise ValueError("chunk_size is required when iterating event data")
+
+        if component_name is None:
+            components_with_ids = self.get_components_with_ids()
+        elif not isinstance(component_name, list):
+            components_with_ids = [component_name]
+        else:
+            components_with_ids = component_name
+
+        for comp in components_with_ids:
+            comp_variables = self.get_component_variables(comp)
+            for var in variables:
+                if var not in comp_variables:
+                    raise ValueError(
+                        f"Component {comp} did not have variable {var} in event data"
+                    )
+
+        for comp in components_with_ids:
+            n_events = self.get_component_n_events(comp)
+            for start in range(0, n_events, chunk_size):
+                stop = min(start + chunk_size, n_events)
+                array = self.get_component_events_array(comp, start, stop)
+                yield {
+                    var: array[:, self.get_variable_index(comp, var)]
+                    for var in variables
+                }
+
+    def get_event_data(self, variables, component_name=None, *, chunk_size=None):
         """
         :return: event data of given list of variables
                  for given component name (list of names allowed)
         """
+
+        _validate_chunk_size(chunk_size)
+        if chunk_size is not None:
+            chunks = {var: [] for var in variables}
+            for event_data in self.iter_event_data(
+                variables, component_name, chunk_size
+            ):
+                for var in variables:
+                    chunks[var].append(event_data[var])
+            return {
+                var: np.concatenate(values) if values else np.empty(0)
+                for var, values in chunks.items()
+            }
 
         if component_name is None:
             # Default is to gather data for all components with pixel id's
