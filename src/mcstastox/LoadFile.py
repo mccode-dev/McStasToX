@@ -1,12 +1,68 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
-import logging
+# ruff: noqa: T201
 import os
 
 import h5py
 import numpy as np
 
 from .ReadNeXus import McStasNeXus
+
+
+class Transfer:
+    """
+    Additional event variable to load and export as a scipp coordinate
+
+    :param mcstas_variable: Name of the variable in the McStas event data,
+                            see ``Data.get_component_variables``
+    :param scipp_coord: Name of the scipp coordinate to create
+    :param unit: Unit of the variable as a scipp unit string, e.g. ``"s"``
+    """
+
+    def __init__(self, mcstas_variable: str, scipp_coord: str, unit: str | None = None):
+        for name, value in (
+            ("mcstas_variable", mcstas_variable),
+            ("scipp_coord", scipp_coord),
+        ):
+            if not isinstance(value, str):
+                raise TypeError(f"Transfer {name} must be a string.")
+            if not value:
+                raise ValueError(f"Transfer {name} must not be empty.")
+        if unit is not None:
+            if not isinstance(unit, str):
+                raise TypeError("Transfer unit must be a string or None.")
+            if not unit:
+                raise ValueError("Transfer unit must not be empty.")
+        self.mcstas_variable = mcstas_variable
+        self.scipp_coord = scipp_coord
+        self.unit = unit
+
+    def __repr__(self) -> str:
+        return (
+            f"Transfer(mcstas_variable={self.mcstas_variable!r}, "
+            f"scipp_coord={self.scipp_coord!r}, unit={self.unit!r})"
+        )
+
+
+def _prepare_extra_variables(extra_variables) -> list[Transfer]:
+    """
+    Normalizes extra_variables to a list of Transfer instances
+
+    :param extra_variables: None, a single Transfer or a list of Transfers
+    :return: list of Transfers, empty if None was given
+    """
+    if extra_variables is None:
+        return []
+    if isinstance(extra_variables, Transfer):
+        return [extra_variables]
+    if not isinstance(extra_variables, list) or any(
+        not isinstance(transfer, Transfer) for transfer in extra_variables
+    ):
+        raise TypeError(
+            "extra_variables must be a Transfer or a list of Transfers, "
+            f"got {type(extra_variables).__name__}."
+        )
+    return extra_variables
 
 
 class Data:
@@ -29,9 +85,6 @@ class Data:
         self.pixel_range = {}  # list of len 2, lowest and highest pixel ID
         self.local_pixel_locations = {}  # list of length
         self.global_pixel_locations = {}
-        self.logger = logging.getLogger(__name__)
-        self.logger.addHandler(logging.StreamHandler())
-        self.logger.setLevel(logging.INFO)
 
     def close(self):
         # Close the file when done
@@ -73,10 +126,10 @@ class Data:
         """
         Show all components
         """
-        self.logger.info("All components in file:")
+        print("All components in file:")
         comps = self.get_components()
         for comp in comps:
-            self.logger.info("%s", comp)
+            print(comp)
 
     def show_components_with_data(self):
         """
@@ -84,11 +137,11 @@ class Data:
         """
         comps = self.get_components_with_data()
         if len(comps) == 0:
-            self.logger.info("No components with data in file:")
+            print("No components with data in file:")
         else:
-            self.logger.info("All components with data in file:")
+            print("All components with data in file:")
             for comp in comps:
-                self.logger.info("%s", comp)
+                print(comp)
 
     def show_components_with_ids(self):
         """
@@ -96,11 +149,11 @@ class Data:
         """
         comps = self.get_components_with_ids()
         if len(comps) == 0:
-            self.logger.info("No components with pixel id information in file:")
+            print("No components with pixel id information in file:")
         else:
-            self.logger.info("All components with pixel id information in file:")
+            print("All components with pixel id information in file:")
             for comp in comps:
-                self.logger.info("%s", comp)
+                print(comp)
 
     def show_components_with_geometry(self):
         """
@@ -108,11 +161,11 @@ class Data:
         """
         comps = self.get_components_with_geometry()
         if len(comps) == 0:
-            self.logger.info("No components with geometry information in file:")
+            print("No components with geometry information in file:")
         else:
-            self.logger.info("All components with geometry information in file:")
+            print("All components with geometry information in file:")
             for comp in comps:
-                self.logger.info("%s", comp)
+                print(comp)
 
     def get_component_variables(self, component_name):
         """
@@ -440,8 +493,9 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include
-                                (not yet functional)
+        :param extra_variables: A Transfer or list of Transfers with
+                                additional event data to include as
+                                scipp coordinates
         :return: scipp object
         """
         try:
@@ -451,14 +505,10 @@ class Data:
                 "Scipp installation required to export to Scipp format"
             ) from e
 
+        # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-
-        # Starting to implement adding additional variables, but not yet done.
-        if extra_variables is not None:
-            if not isinstance(extra_variables, list):
-                extra_variables = [extra_variables]
-            # Default is to gather weight, time and id
-            variables += extra_variables
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
         event_data = self.get_event_data(
             variables=variables,
@@ -486,6 +536,12 @@ class Data:
                 'sample_position': sc.vector(sample_pos, unit='m'),
             },
         )
+        for transfer in extra_variables:
+            events.coords[transfer.scipp_coord] = sc.array(
+                dims=['events'],
+                unit=transfer.unit,
+                values=event_data[transfer.mcstas_variable],
+            )
 
         return events
 
@@ -505,8 +561,9 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include
-                                (not yet functional)
+        :param extra_variables: A Transfer or list of Transfers with
+                                additional event data to include as
+                                scipp coordinates
         :return: scipp DataGroup with events, positions, bank_ids and bank_names
         """
         try:
@@ -518,12 +575,10 @@ class Data:
 
         # todo: Make as generator to work in chunks
 
+        # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-        if extra_variables is not None:
-            if not isinstance(extra_variables, list):
-                extra_variables = [extra_variables]
-            # Default is to gather weight, time and id
-            variables += extra_variables
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
         event_data = self.get_event_data(
             variables=variables,
@@ -547,6 +602,12 @@ class Data:
                 'sample_position': sc.vector(sample_pos, unit='m'),
             },
         )
+        for transfer in extra_variables:
+            events.coords[transfer.scipp_coord] = sc.array(
+                dims=['events'],
+                unit=transfer.unit,
+                values=event_data[transfer.mcstas_variable],
+            )
 
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(
