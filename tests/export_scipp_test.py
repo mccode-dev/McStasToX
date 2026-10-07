@@ -74,10 +74,15 @@ def _flatten_binned(array):
 
 
 def test_transfer_construction():
-    transfer = Transfer(mcstas_name="lambda", coord_name="energy", unit="eV")
-    assert transfer.mcstas_name == "lambda"
-    assert transfer.coord_name == "energy"
+    transfer = Transfer(mcstas_variable="lambda", scipp_coord="energy", unit="eV")
+    assert transfer.mcstas_variable == "lambda"
+    assert transfer.scipp_coord == "energy"
     assert transfer.unit == "eV"
+
+
+def test_transfer_defaults_to_no_unit():
+    transfer = Transfer(mcstas_variable="lambda", scipp_coord="energy")
+    assert transfer.unit is None
 
 
 def test_transfer_exported_from_package_top_level():
@@ -98,9 +103,9 @@ def test_show_components_with_geometry_prints_once(capsys):
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"mcstas_name": 5, "coord_name": "energy", "unit": "angstrom"},
-        {"mcstas_name": None, "coord_name": "energy", "unit": "angstrom"},
-        {"mcstas_name": "L", "coord_name": "energy", "unit": 3.0},
+        {"mcstas_variable": 5, "scipp_coord": "L", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": None, "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "energy", "unit": 3.0},
     ],
 )
 def test_transfer_rejects_non_string_fields(kwargs):
@@ -111,9 +116,9 @@ def test_transfer_rejects_non_string_fields(kwargs):
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"mcstas_name": "L", "coord_name": "", "unit": "angstrom"},
-        {"mcstas_name": "", "coord_name": "energy", "unit": "angstrom"},
-        {"mcstas_name": "L", "coord_name": "energy", "unit": ""},
+        {"mcstas_variable": "", "scipp_coord": "L", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "", "unit": "angstrom"},
+        {"mcstas_variable": "L", "scipp_coord": "energy", "unit": ""},
     ],
 )
 def test_transfer_rejects_empty_fields(kwargs):
@@ -122,7 +127,7 @@ def test_transfer_rejects_empty_fields(kwargs):
 
 
 def test_transfer_allows_missing_unit():
-    transfer = Transfer(mcstas_name="x", coord_name="position")
+    transfer = Transfer(mcstas_variable="x", scipp_coord="position")
     assert transfer.unit is None
 
 
@@ -147,8 +152,10 @@ def test_export_scipp_simple_extra_variables():
         source_name="source",
         sample_name="sample_position",
         extra_variables=[
-            Transfer(mcstas_name="L", coord_name="sim_wavelength", unit="angstrom"),
-            Transfer(mcstas_name="x", coord_name="x", unit="m"),
+            Transfer(
+                mcstas_variable="L", scipp_coord="sim_wavelength", unit="angstrom"
+            ),
+            Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         ],
     )
     assert state["requested_variables"] == ["p", "t", "id", "L", "x"]
@@ -165,7 +172,7 @@ def test_export_scipp_simple_extra_variable_without_unit():
     events = data.export_scipp_simple(
         source_name="source",
         sample_name="sample_position",
-        extra_variables=Transfer(mcstas_name="x", coord_name="x"),
+        extra_variables=Transfer(mcstas_variable="x", scipp_coord="x"),
     )
     assert events.coords["x"].unit is None
 
@@ -175,9 +182,7 @@ def test_export_scipp_simple_single_variable():
     events = data.export_scipp_simple(
         source_name="source",
         sample_name="sample_position",
-        extra_variables=Transfer(
-            mcstas_name="L", coord_name="sim_wavelength", unit="angstrom"
-        ),
+        extra_variables=Transfer(mcstas_variable="L", scipp_coord="sim_wavelength"),
     )
     assert state["requested_variables"] == ["p", "t", "id", "L"]
     np.testing.assert_array_equal(
@@ -260,8 +265,10 @@ def test_export_scipp_extra_variables():
         source_name="source",
         sample_name="sample_position",
         extra_variables=[
-            Transfer(mcstas_name="L", coord_name="sim_wavelength", unit="angstrom"),
-            Transfer(mcstas_name="x", coord_name="x", unit="m"),
+            Transfer(
+                mcstas_variable="L", scipp_coord="sim_wavelength", unit="angstrom"
+            ),
+            Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         ],
     )
     assert state["requested_variables"] == ["p", "t", "id", "L", "x"]
@@ -299,7 +306,7 @@ def test_extra_variables_rejects_invalid_input(extra_variables):
 def test_extra_variables_rejects_list_with_invalid_entry():
     data, _ = _make_data()
     invalid_list = [
-        Transfer(mcstas_name="x", coord_name="x", unit="m"),
+        Transfer(mcstas_variable="x", scipp_coord="x", unit="m"),
         "L",
     ]
     with pytest.raises(TypeError):

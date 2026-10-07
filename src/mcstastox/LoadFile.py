@@ -14,40 +14,42 @@ _DEFAULT_SAMPLING_CHUNK_SIZE = 100_000
 
 class Transfer:
     """
-    Transfer an event variable from McStas to a scipp coordinate.
+    Additional event variable to load and export as a scipp coordinate
 
-    :param mcstas_name: Name of the variable in the McStas event data, see
-                        ``Data.get_component_variables``
-    :param coord_name: Name of the scipp coordinate to create
+    :param mcstas_variable: Name of the variable in the McStas event data,
+                            see ``Data.get_component_variables``
+    :param scipp_coord: Name of the scipp coordinate to create
     :param unit: Unit of the variable as a scipp unit string, e.g. ``"s"``
     """
 
-    def __init__(self, mcstas_name: str, coord_name: str, unit: str | None = None):
+    def __init__(self, mcstas_variable: str, scipp_coord: str, unit: str | None = None):
         for name, value in (
-            ("mcstas_name", mcstas_name),
-            ("coord_name", coord_name),
-            ("unit", unit),
+            ("mcstas_variable", mcstas_variable),
+            ("scipp_coord", scipp_coord),
         ):
-            if name == "unit" and value is None:
-                continue
             if not isinstance(value, str):
                 raise TypeError(f"Transfer {name} must be a string.")
             if not value:
                 raise ValueError(f"Transfer {name} must not be empty.")
-        self.mcstas_name = mcstas_name
-        self.coord_name = coord_name
+        if unit is not None:
+            if not isinstance(unit, str):
+                raise TypeError("Transfer unit must be a string or None.")
+            if not unit:
+                raise ValueError("Transfer unit must not be empty.")
+        self.mcstas_variable = mcstas_variable
+        self.scipp_coord = scipp_coord
         self.unit = unit
 
     def __repr__(self) -> str:
         return (
-            f"Transfer(mcstas_name={self.mcstas_name!r}, "
-            f"coord_name={self.coord_name!r}, unit={self.unit!r})"
+            f"Transfer(mcstas_variable={self.mcstas_variable!r}, "
+            f"scipp_coord={self.scipp_coord!r}, unit={self.unit!r})"
         )
 
 
-def _prepare_transfers(extra_variables) -> list[Transfer]:
+def _prepare_extra_variables(extra_variables) -> list[Transfer]:
     """
-    Normalizes extra_variables to a list of Transfer instances.
+    Normalizes extra_variables to a list of Transfer instances
 
     :param extra_variables: None, a single Transfer or a list of Transfers
     :return: list of Transfers, empty if None was given
@@ -178,7 +180,7 @@ class Data:
         """Yield filtered event data without assembling the complete event set."""
         _validate_chunk_size(chunk_size)
         for event_data in self.file_object.iter_event_data(
-            variables, component_name, chunk_size
+            variables, component_name=component_name, chunk_size=chunk_size
         ):
             if "p" in variables and filter_zeros:
                 nonzero = event_data["p"] != 0
@@ -189,9 +191,7 @@ class Data:
                     continue
             yield event_data
 
-    def get_event_data(
-        self, variables, component_name=None, filter_zeros=True, *, chunk_size=None
-    ):
+    def get_event_data(self, variables, component_name=None, filter_zeros=True):
         """
         Provides event data with requested variables as dictionaries
 
@@ -199,22 +199,8 @@ class Data:
         :param component_name: optional, single component name or list of names
         :param filter_zeros: bool: Set to True if entries with 0 weights
                                    should be removed
-        :param chunk_size: optional positive number of events to read at a time
         :return: dictionary with keys named after variables and numpy arrays as values
         """
-
-        _validate_chunk_size(chunk_size)
-        if chunk_size is not None:
-            chunks = {var: [] for var in variables}
-            for event_data in self._iter_event_chunks(
-                variables, component_name, chunk_size, filter_zeros
-            ):
-                for var in variables:
-                    chunks[var].append(event_data[var])
-            return {
-                var: np.concatenate(values) if values else np.empty(0)
-                for var, values in chunks.items()
-            }
 
         event_data = self.file_object.get_event_data(
             variables=variables, component_name=component_name
@@ -544,10 +530,10 @@ class Data:
             coords=coords,
         )
         for transfer in extra_variables:
-            events.coords[transfer.coord_name] = sc.array(
+            events.coords[transfer.scipp_coord] = sc.array(
                 dims=["events"],
                 unit=transfer.unit,
-                values=event_data[transfer.mcstas_name],
+                values=event_data[transfer.mcstas_variable],
             )
         return events
 
@@ -665,8 +651,8 @@ class Data:
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
         :param extra_variables: A Transfer or list of Transfers with
-                                  additional event data to include as
-                                  scipp coordinates
+                                additional event data to include as
+                                scipp coordinates
         :param chunk_size: optional positive number of events to read at a time
         :param sampling: optional SamplingSettings for converting weighted
                          events to sampled unit-weight events
@@ -681,8 +667,8 @@ class Data:
 
         # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-        extra_variables = _prepare_transfers(extra_variables)
-        variables += [transfer.mcstas_name for transfer in extra_variables]
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
         return self._build_scipp_events(
             sc=sc,
@@ -717,8 +703,8 @@ class Data:
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
         :param extra_variables: A Transfer or list of Transfers with
-                                  additional event data to include as
-                                  scipp coordinates
+                                additional event data to include as
+                                scipp coordinates
         :param chunk_size: optional positive number of events to read at a time
         :param sampling: optional SamplingSettings for converting weighted
                          events to sampled unit-weight events
@@ -733,8 +719,8 @@ class Data:
 
         # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
-        extra_variables = _prepare_transfers(extra_variables)
-        variables += [transfer.mcstas_name for transfer in extra_variables]
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
         events = self._build_scipp_events(
             sc=sc,
@@ -748,7 +734,6 @@ class Data:
             simple=False,
             sampling=sampling,
         )
-
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(
             component_name=component_name

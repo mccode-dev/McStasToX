@@ -2,9 +2,7 @@
 # Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
 """Tests for chunked Nexus loading and Scipp export."""
 
-from pathlib import Path
-
-import mcstasscript as ms
+import h5py
 import numpy as np
 import pytest
 
@@ -12,87 +10,83 @@ from mcstastox import SamplingSettings
 from mcstastox.LoadFile import Data, Transfer
 
 
-def _make_test_instrument() -> ms.McStas_instr:
-    """Build the small McStas instrument used by the chunking tests."""
-    instr = ms.McStas_instr("chunk_processing_test")
-    source = instr.add_component("source", "Source_simple")
-    source.set_parameters(
-        xwidth=0.01,
-        yheight=0.01,
-        focus_xw=0.01,
-        focus_yh=0.01,
-        dist=2,
-        lambda0=instr.add_parameter("wavelength", value=1.8),
-        dlambda=instr.add_parameter("delta_wavelength", value=1.3),
-    )
+def _write_event_component(components, index, name, pixel_ids, position, events):
+    component = components.create_group(f"{index:04d}_{name}")
+    component.create_dataset("Position", data=position)
+    component.create_dataset("Rotation", data=np.eye(3))
 
-    sample_position = instr.add_component("sample_position", "Arm")
-    sample_position.set_AT(source.dist, RELATIVE=source)
-    sample = instr.add_component("sample", "PowderN", RELATIVE=sample_position)
-    sample.set_parameters(
-        radius=source.xwidth / 2,
-        yheight=source.focus_yh,
-        reflections='"Cu.laz"',
-    )
+    geometry = component.create_group("Geometry")
+    geometry.attrs["xmin"] = np.bytes_("-1.0")
+    geometry.attrs["xmax"] = np.bytes_("1.0")
+    geometry.attrs["ymin"] = np.bytes_("-1.0")
+    geometry.attrs["ymax"] = np.bytes_("1.0")
+    geometry.attrs["Shape identifier"] = np.bytes_("0")
 
-    detector_direction = instr.add_component(
-        "detector_direction_square_1",
-        "Arm",
-        RELATIVE=sample_position,
-        ROTATED=[0, -140, 0],
-    )
-    monitor = instr.add_component("Square_1", "Monitor_nD")
-    monitor.set_parameters(
-        xwidth=0.1,
-        yheight=0.1,
-        restore_neutron=1,
-        filename='"direct_event_square_signal.dat"',
-    )
-    monitor.options = (
-        '"mantid square x bins=15 y bins=15, '
-        'neutron pixel min=0 t, l, list all neutrons"'
-    )
-    monitor.set_AT(0.35, RELATIVE=detector_direction)
+    output = component.create_group("output")
+    bins = output.create_group("BINS")
+    bins.attrs["xvar"] = np.bytes_("x")
+    bins.attrs["xlabel"] = np.bytes_("x")
+    bins.attrs["yvar"] = np.bytes_("y")
+    bins.attrs["ylabel"] = np.bytes_("y")
+    bins.create_dataset("x", data=np.linspace(-0.5, 0.5, 4))
+    bins.create_dataset("y", data=np.linspace(-0.5, 0.5, 3))
+    bins.create_dataset("pixels", data=pixel_ids.reshape(3, 4))
 
-    detector_direction = instr.add_component(
-        "detector_direction_square_2",
-        "Arm",
-        RELATIVE=sample_position,
-        ROTATED=[20, 57, 0],
-    )
-    monitor = instr.add_component("Square_2", "Monitor_nD")
-    monitor.set_parameters(
-        xwidth=0.25,
-        yheight=0.1,
-        restore_neutron=1,
-        filename='"scattered_event_square_signal.dat"',
-    )
-    monitor.options = (
-        '"mantid square x bins=30 y bins=15, '
-        'neutron pixel min=225 t, list all neutrons"'
-    )
-    monitor.set_AT(0.5, RELATIVE=detector_direction)
-
-    return instr
+    event_data = output.create_group("event_data")
+    event_data.attrs["variables"] = np.bytes_("p t id L")
+    event_data.create_dataset("events", data=events)
 
 
-@pytest.fixture(scope="session")
-def data_folder(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Generate a temporary NeXus event file with McStas."""
-    work_folder = tmp_path_factory.mktemp("chunk_processing")
-    output_path = work_folder / "results"
-    instr = _make_test_instrument()
-    instr.set_parameters(wavelength=1.8, delta_wavelength=1.3)
-    instr.settings(
-        ncount=10_000,
-        output_path=str(output_path),
-        suppress_output=True,
-        NeXus=True,
-    )
-    instr.backengine()
-    if not (output_path / "mccode.h5").exists():
-        raise RuntimeError("McStas did not generate the test NeXus file")
-    return output_path
+def _write_fixture(file_path, events=None):
+    pixel_ids = np.arange(12, dtype=int)
+    if events is None:
+        weights = np.array([0.0, *np.ones(11)])
+        times = np.arange(12, dtype=float)
+        wavelengths = np.linspace(1.0, 2.0, 12)
+        events = np.column_stack((weights, times, pixel_ids, wavelengths))
+
+    with h5py.File(file_path, "w") as file_handle:
+        entry = file_handle.create_group("entry1")
+        entry.create_group("data")
+
+        simulation = entry.create_group("simulation")
+        simulation.attrs["program"] = np.bytes_("3.6.16")
+        simulation.create_group("Param")
+
+        instrument = entry.create_group("instrument")
+        components = instrument.create_group("components")
+        for index, name, component_ids, position in (
+            (0, "source", None, [0.0, 0.0, -1.0]),
+            (1, "sample_position", None, [0.0, 0.0, 0.0]),
+            (2, "Square_1", pixel_ids, [0.0, 0.0, 1.0]),
+            (3, "Square_2", pixel_ids + 12, [1.0, 0.0, 1.0]),
+        ):
+            if component_ids is None:
+                component = components.create_group(f"{index:04d}_{name}")
+                component.create_dataset("Position", data=position)
+                component.create_dataset("Rotation", data=np.eye(3))
+            else:
+                _write_event_component(
+                    components,
+                    index,
+                    name,
+                    component_ids,
+                    position,
+                    events,
+                )
+
+
+@pytest.fixture(scope="module")
+def nexus_fixture(tmp_path_factory):
+    data_folder = tmp_path_factory.mktemp("nexus")
+    _write_fixture(data_folder / "mccode.h5")
+    return data_folder
+
+
+@pytest.fixture
+def empty_nexus_fixture(tmp_path):
+    _write_fixture(tmp_path / "mccode.h5", events=np.empty((0, 4)))
+    return tmp_path
 
 
 def _flatten_binned(array):
@@ -101,36 +95,30 @@ def _flatten_binned(array):
     return np.concatenate(values) if values else np.empty(0)
 
 
-def test_get_event_data_chunking_matches_full_read(data_folder):
-    with Data(data_folder) as data:
+def test_event_iterator_matches_full_read(nexus_fixture):
+    variables = ["p", "t", "id", "L"]
+    with Data(nexus_fixture) as data:
         full = data.get_event_data(
-            ["p", "t", "id", "L"],
+            variables,
             component_name="Square_1",
             filter_zeros=False,
         )
-        chunked = data.get_event_data(
-            ["p", "t", "id", "L"],
-            component_name="Square_1",
-            filter_zeros=False,
-            chunk_size=7,
-        )
-        nexus_full = data.file_object.get_event_data(
-            ["p", "t", "id"], component_name="Square_1"
-        )
-        nexus_chunked = data.file_object.get_event_data(
-            ["p", "t", "id"], component_name="Square_1", chunk_size=7
-        )
+        chunks = {var: [] for var in variables}
+        for event_data in data.file_object.iter_event_data(
+            variables, component_name="Square_1", chunk_size=7
+        ):
+            for var in variables:
+                chunks[var].append(event_data[var])
 
-    for variable in full:
-        np.testing.assert_array_equal(chunked[variable], full[variable])
-    for variable in nexus_full:
-        np.testing.assert_array_equal(nexus_chunked[variable], nexus_full[variable])
+    for variable in variables:
+        iterated = np.concatenate(chunks[variable])
+        np.testing.assert_array_equal(iterated, full[variable])
 
 
 @pytest.mark.parametrize("chunk_size", [1, 7, 10000])
-def test_simple_export_chunking_matches_full_export(data_folder, chunk_size):
+def test_simple_export_chunking_matches_full_export(chunk_size, nexus_fixture):
     extra = Transfer("L", "wavelength", "angstrom")
-    with Data(data_folder) as data:
+    with Data(nexus_fixture) as data:
         full = data.export_scipp_simple(
             "source",
             "sample_position",
@@ -153,8 +141,8 @@ def test_simple_export_chunking_matches_full_export(data_folder, chunk_size):
 
 
 @pytest.mark.parametrize("filter_zeros", [True, False])
-def test_grouped_export_chunking_matches_full_export(data_folder, filter_zeros):
-    with Data(data_folder) as data:
+def test_grouped_export_chunking_matches_full_export(filter_zeros, nexus_fixture):
+    with Data(nexus_fixture) as data:
         full = data.export_scipp(
             "source",
             "sample_position",
@@ -183,34 +171,37 @@ def test_grouped_export_chunking_matches_full_export(data_folder, filter_zeros):
     )
 
 
-def test_chunking_supports_multiple_components(data_folder):
-    with Data(data_folder) as data:
-        full = data.get_event_data(["p", "t", "id"], filter_zeros=False)
-        chunked = data.get_event_data(
-            ["p", "t", "id"], filter_zeros=False, chunk_size=7
+def test_event_iterator_defaults_to_all_components(nexus_fixture):
+    variables = ["p", "t", "id"]
+    with Data(nexus_fixture) as data:
+        full = data.file_object.get_event_data(variables)
+        chunks = {var: [] for var in variables}
+        for event_data in data.file_object.iter_event_data(variables, chunk_size=7):
+            for var in variables:
+                chunks[var].append(event_data[var])
+
+    for variable in variables:
+        iterated = np.concatenate(chunks[variable])
+        np.testing.assert_array_equal(iterated, full[variable])
+
+
+def test_event_iterator_requires_chunk_size(nexus_fixture):
+    with Data(nexus_fixture) as data:
+        with pytest.raises(TypeError, match="chunk_size"):
+            data.file_object.iter_event_data(["p"])
+
+
+def test_simple_export_chunking_handles_empty_result(empty_nexus_fixture):
+    with Data(empty_nexus_fixture) as data:
+        events = data.export_scipp_simple(
+            "source", "sample_position", component_name="Square_1", chunk_size=2
         )
-
-    for variable in full:
-        np.testing.assert_array_equal(chunked[variable], full[variable])
-
-
-def test_simple_export_chunking_handles_empty_result():
-    data = Data.__new__(Data)
-    data.component_pixel_order = ["Square_1"]
-    data.pixel_range = {"Square_1": [0, 0]}
-    data._iter_event_chunks = lambda *args: iter(())
-    data.get_id_to_global_coordinates = lambda component_name=None: np.zeros((1, 3))
-    data.get_global_component_coordinates = lambda component_name: np.zeros(3)
-
-    events = data.export_scipp_simple(
-        "source", "sample", component_name="Square_1", chunk_size=2
-    )
 
     assert events.sizes["events"] == 0
 
 
-def test_simple_export_sampling_reads_in_chunks(data_folder):
-    with Data(data_folder) as data:
+def test_simple_export_sampling_reads_in_chunks(nexus_fixture):
+    with Data(nexus_fixture) as data:
         events = data.export_scipp_simple(
             "source",
             "sample_position",
@@ -223,8 +214,8 @@ def test_simple_export_sampling_reads_in_chunks(data_folder):
     np.testing.assert_array_equal(events.values, np.ones(25))
 
 
-def test_grouped_export_sampling_returns_unit_weight_events(data_folder):
-    with Data(data_folder) as data:
+def test_grouped_export_sampling_returns_unit_weight_events(nexus_fixture):
+    with Data(nexus_fixture) as data:
         output = data.export_scipp(
             "source",
             "sample_position",
@@ -236,8 +227,8 @@ def test_grouped_export_sampling_returns_unit_weight_events(data_folder):
     np.testing.assert_array_equal(_flatten_binned(output["events"].data), np.ones(25))
 
 
-@pytest.mark.parametrize("chunk_size", [0, -1, 1.5, True, "4"])
-def test_chunk_size_must_be_positive_integer(data_folder, chunk_size):
-    with Data(data_folder) as data:
+@pytest.mark.parametrize("chunk_size", [None, 0, -1, 1.5, True, "4"])
+def test_chunk_size_must_be_positive_integer(chunk_size, nexus_fixture):
+    with Data(nexus_fixture) as data:
         with pytest.raises((TypeError, ValueError)):
-            data.get_event_data(["p"], chunk_size=chunk_size)
+            list(data.file_object.iter_event_data(["p"], chunk_size=chunk_size))
