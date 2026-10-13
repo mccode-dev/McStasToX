@@ -28,6 +28,25 @@ def test_sampling_is_weighted_and_returns_unit_weights():
     assert result.effective_duration_variance == 39062.5
 
 
+def test_sampling_uses_custom_weight_key():
+    result = sample_event_chunks(
+        [
+            {
+                "weight": np.array([1.0, 3.0]),
+                "id": np.array([10, 20]),
+            }
+        ],
+        SamplingSettings(n_samples=1000, seed=42, weight_key="weight"),
+    )
+
+    assert "p" not in result
+    np.testing.assert_array_equal(result["weight"], np.ones(1000))
+    assert result.total_weight == 4.0
+    assert result.total_weight_variance == 10.0
+    assert result.effective_duration == 250.0
+    assert result.effective_duration_variance == 39062.5
+
+
 def test_sampling_handles_chunks_and_ordering():
     result = sample_event_chunks(
         [
@@ -70,6 +89,12 @@ def test_sampling_settings_reject_invalid_field_types(kwargs):
         SamplingSettings(**kwargs)
 
 
+@pytest.mark.parametrize("weight_key", [None, 1, ""])
+def test_sampling_settings_reject_invalid_weight_key(weight_key):
+    with pytest.raises((TypeError, ValueError)):
+        SamplingSettings(n_samples=1, weight_key=weight_key)
+
+
 def test_sampling_rejects_negative_weights():
     with pytest.raises(ValueError, match="not be negative"):
         sample_event_chunks(
@@ -85,4 +110,15 @@ def test_sampling_rejects_event_chunk_without_weights():
         sample_event_chunks(
             [{"id": np.array([1, 2])}],
             SamplingSettings(n_samples=2),
+        )
+
+
+def test_sampling_rejects_event_chunk_without_custom_weight_key():
+    with pytest.raises(
+        ValueError,
+        match="Event chunk 0 must contain a 'weight' array of event weights",
+    ):
+        sample_event_chunks(
+            [{"id": np.array([1, 2])}],
+            SamplingSettings(n_samples=2, weight_key="weight"),
         )

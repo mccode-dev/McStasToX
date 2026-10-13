@@ -44,7 +44,7 @@ def _make_data():
     return data, state
 
 
-def _make_chunked_data():
+def _make_chunked_data(weight_key="p"):
     data, state = _make_data()
     event_data = {
         "p": np.array([1.0, 2.0, 3.0]),
@@ -53,11 +53,16 @@ def _make_chunked_data():
         "L": np.array([1.5, 1.7, 1.9]),
         "x": np.array([-0.5, 0.0, 0.5]),
     }
+    if weight_key != "p":
+        event_data[weight_key] = event_data.pop("p")
 
-    def iter_event_chunks(variables, component_name, chunk_size, filter_zeros):
+    def iter_event_chunks(
+        variables, component_name, chunk_size, filter_zeros, requested_weight_key="p"
+    ):
         state["requested_variables"] = list(variables)
         state["chunk_size"] = chunk_size
-        for start in range(0, len(event_data["p"]), 2):
+        assert requested_weight_key == weight_key
+        for start in range(0, len(event_data[weight_key]), 2):
             yield {
                 variable: values[start : start + 2]
                 for variable, values in event_data.items()
@@ -212,6 +217,20 @@ def test_export_scipp_simple_sampling_returns_unit_weight_events():
     )
 
 
+def test_export_scipp_simple_sampling_accepts_custom_weight_key():
+    data, state = _make_chunked_data(weight_key="weight")
+    events = data.export_scipp_simple(
+        source_name="source",
+        sample_name="sample_position",
+        sampling=SamplingSettings(n_samples=20, seed=42, weight_key="weight"),
+        chunk_size=2,
+    )
+
+    assert state["requested_variables"] == ["weight", "t", "id"]
+    np.testing.assert_array_equal(events.values, np.ones(20))
+    assert events.coords["effective_duration"].value == pytest.approx(20 / 6)
+
+
 def test_export_scipp_sampling_is_reproducible():
     first, _ = _make_chunked_data()
     second, _ = _make_chunked_data()
@@ -243,6 +262,19 @@ def test_export_scipp_sampling_preserves_effective_duration():
     assert duration.unit == sc.units.s
     assert duration.value == pytest.approx(20 / 6)
     assert duration.variance == pytest.approx((20 / 6) ** 2 * 14 / 6**2)
+
+
+def test_export_scipp_sampling_accepts_custom_weight_key():
+    data, state = _make_chunked_data(weight_key="weight")
+    output = data.export_scipp(
+        "source",
+        "sample_position",
+        sampling=SamplingSettings(n_samples=20, seed=42, weight_key="weight"),
+        chunk_size=2,
+    )
+
+    assert state["requested_variables"] == ["weight", "t", "id"]
+    np.testing.assert_array_equal(_flatten_binned(output["events"].data), np.ones(20))
 
 
 def test_export_scipp_keeps_standard_behavior():
