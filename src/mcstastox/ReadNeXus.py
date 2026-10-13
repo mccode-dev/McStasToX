@@ -9,6 +9,17 @@ import h5py
 import numpy as np
 
 
+def _validate_chunk_size(chunk_size: int | None, *, allow_none: bool = True) -> None:
+    if chunk_size is None:
+        if not allow_none:
+            raise TypeError("chunk_size must be a positive integer")
+        return
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, (int, np.integer)):
+        raise TypeError("chunk_size must be a positive integer or None")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be a positive integer")
+
+
 @dataclass(frozen=True)
 class McStasVersionSetting:
     component_numbers: int | None = None
@@ -472,7 +483,7 @@ class McStasNeXus:
 
         return info_entry["events"].shape[0]
 
-    def get_component_events_array(self, component_name):
+    def get_component_events_array(self, component_name, start=None, stop=None):
         """
         :return: get event array from component with event data
         """
@@ -484,7 +495,10 @@ class McStasNeXus:
                 f"The component '{component_name}' does not have events entry."
             )
 
-        return np.asarray(info_entry["events"])
+        events = info_entry["events"]
+        if start is None and stop is None:
+            return np.asarray(events)
+        return np.asarray(events[slice(start, stop)])
 
     def get_component_parameter_entry(self, component_name):
         """
@@ -568,31 +582,45 @@ class McStasNeXus:
         variables = self.get_component_variables(component_name)
         return variables.split(" ").index(variable)
 
-    def get_event_data(self, variables, component_name=None):
-        """
-        :return: event data of given list of variables
-                 for given component name (list of names allowed)
-        """
-
+    def _get_event_components_with_ids(self, component_name):
+        """Normalize event components, defaulting to components with pixel IDs."""
         if component_name is None:
-            # Default is to gather data for all components with pixel id's
-            components_with_ids = self.get_components_with_ids()
-        else:
-            # Allow component_name to be a list of names, convert if it is not
-            if not isinstance(component_name, list):
-                component_name = [component_name]
+            return self.get_components_with_ids()
+        if not isinstance(component_name, list):
+            return [component_name]
+        return component_name
 
-            components_with_ids = component_name
+    def iter_event_data(self, variables, *, component_name=None, chunk_size: int):
+        """Yield selected event data in bounded chunks.
 
-        # Get total length of return arrays first
-        total_length = 0
-        ranges = {}
-        for comp in components_with_ids:
-            ranges[comp] = dict(start=total_length)
-            total_length += self.get_component_n_events(comp)
-            ranges[comp]["end"] = total_length
+        Parameters
+        ----------
+        variables : iterable of str
+            Names of the event variables to return.
+        component_name : str or list of str, optional
+            Component name or names to read. If omitted, read all components
+            with pixel IDs.
+        chunk_size : int
+            Maximum number of event rows loaded from the NeXus file for each
+            yielded chunk. Must be a positive integer.
 
-        # Check variables contained in all components
+        Yields
+        ------
+        dict[str, numpy.ndarray]
+            A dictionary containing the requested variables for one chunk.
+            Components are yielded in the requested order.
+
+        Raises
+        ------
+        TypeError
+            If ``chunk_size`` is not an integer or is explicitly ``None``.
+        ValueError
+            If ``chunk_size`` is not positive, or a requested variable is
+            missing from a component.
+        """
+        _validate_chunk_size(chunk_size, allow_none=False)
+        components_with_ids = self._get_event_components_with_ids(component_name)
+
         for comp in components_with_ids:
             comp_variables = self.get_component_variables(comp)
             for var in variables:
@@ -601,18 +629,42 @@ class McStasNeXus:
                         f"Component {comp} did not have variable {var} in event data"
                     )
 
-        # Allocate return arrays
-        returns = {}
-        for var in variables:
-            returns[var] = np.empty(total_length)
-
-        # Fill return arrays with requested data
         for comp in components_with_ids:
-            array = self.get_component_events_array(comp)
-            start = ranges[comp]["start"]
-            end = ranges[comp]["end"]
+            n_events = self.get_component_n_events(comp)
+            for start in range(0, n_events, chunk_size):
+                stop = min(start + chunk_size, n_events)
+                array = self.get_component_events_array(comp, start, stop)
+                yield {
+                    var: array[:, self.get_variable_index(comp, var)]
+                    for var in variables
+                }
+
+    def get_event_data(self, variables, component_name=None):
+        """
+        :return: event data of given list of variables
+                 for given component name (list of names allowed)
+        """
+
+        components_with_ids = self._get_event_components_with_ids(component_name)
+        total_length = sum(
+            self.get_component_n_events(comp) for comp in components_with_ids
+        )
+        returns = {var: np.empty(total_length) for var in variables}
+
+        if not variables:
+            return returns
+
+        # A bound covering all selected events gives one chunk per component
+        # while retaining the iterator's validation and extraction logic.
+        offset = 0
+        for event_data in self.iter_event_data(
+            variables,
+            component_name=components_with_ids,
+            chunk_size=max(1, total_length),
+        ):
+            chunk_length = len(next(iter(event_data.values())))
             for var in variables:
-                var_index = self.get_variable_index(comp, var)
-                returns[var][start:end] = array[:, var_index]
+                returns[var][offset : offset + chunk_length] = event_data[var]
+            offset += chunk_length
 
         return returns

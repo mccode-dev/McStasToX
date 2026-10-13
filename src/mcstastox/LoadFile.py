@@ -6,7 +6,7 @@ import os
 import h5py
 import numpy as np
 
-from .ReadNeXus import McStasNeXus
+from .ReadNeXus import McStasNeXus, _validate_chunk_size
 
 
 class Transfer:
@@ -172,6 +172,21 @@ class Data:
         :return: list of available variables for given component name with event data
         """
         return self.file_object.get_component_variables(component_name)
+
+    def _iter_event_chunks(self, variables, component_name, chunk_size, filter_zeros):
+        """Yield filtered event data without assembling the complete event set."""
+        _validate_chunk_size(chunk_size)
+        for event_data in self.file_object.iter_event_data(
+            variables, component_name=component_name, chunk_size=chunk_size
+        ):
+            if "p" in variables and filter_zeros:
+                nonzero = event_data["p"] != 0
+                event_data = {
+                    key: values[nonzero] for key, values in event_data.items()
+                }
+                if len(event_data["p"]) == 0:
+                    continue
+            yield event_data
 
     def get_event_data(self, variables, component_name=None, filter_zeros=True):
         """
@@ -477,6 +492,109 @@ class Data:
         """
         return self.get_id_to_coordinate(local=True, component_name=component_name)
 
+    def _event_data_to_scipp(
+        self,
+        sc,
+        event_data,
+        global_coordinates,
+        source_pos,
+        sample_pos,
+        extra_variables,
+        simple,
+    ):
+        global_pos = global_coordinates[event_data["id"].astype(int), :]
+        if simple:
+            coords = {
+                "position": sc.vectors(dims=["events"], values=global_pos, unit="m"),
+            }
+        else:
+            coords = {
+                "pixel_id": sc.array(
+                    dims=["events"], values=event_data["id"].astype(int)
+                ),
+            }
+        coords.update(
+            {
+                "t": sc.array(dims=["events"], unit="s", values=event_data["t"]),
+                "source_position": sc.vector(source_pos, unit="m"),
+                "sample_position": sc.vector(sample_pos, unit="m"),
+            }
+        )
+        events = sc.DataArray(
+            data=sc.array(
+                dims=["events"], unit=sc.units.counts, values=event_data["p"]
+            ),
+            coords=coords,
+        )
+        for transfer in extra_variables:
+            events.coords[transfer.scipp_coord] = sc.array(
+                dims=["events"],
+                unit=transfer.unit,
+                values=event_data[transfer.mcstas_variable],
+            )
+        return events
+
+    def _build_scipp_events(
+        self,
+        sc,
+        variables,
+        component_name,
+        filter_zeros,
+        extra_variables,
+        source_name,
+        sample_name,
+        chunk_size,
+        simple,
+    ):
+        global_coordinates = self.get_id_to_global_coordinates(
+            component_name=component_name
+        )
+        source_pos = self.get_global_component_coordinates(source_name)
+        sample_pos = self.get_global_component_coordinates(sample_name)
+
+        if chunk_size is None:
+            event_data = self.get_event_data(
+                variables=variables,
+                component_name=component_name,
+                filter_zeros=filter_zeros,
+            )
+            return self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+            )
+
+        event_arrays = [
+            self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+            )
+            for event_data in self._iter_event_chunks(
+                variables, component_name, chunk_size, filter_zeros
+            )
+        ]
+        if not event_arrays:
+            empty_data = {variable: np.empty(0) for variable in variables}
+            return self._event_data_to_scipp(
+                sc,
+                empty_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+            )
+        return sc.concat(event_arrays, "events")
+
     def export_scipp_simple(
         self,
         source_name,
@@ -484,6 +602,8 @@ class Data:
         component_name=None,
         filter_zeros=True,
         extra_variables=None,
+        *,
+        chunk_size=None,
     ):
         """
         Provides simple scipp object that is easy to work with but takes more space
@@ -510,40 +630,17 @@ class Data:
         extra_variables = _prepare_extra_variables(extra_variables)
         variables += [transfer.mcstas_variable for transfer in extra_variables]
 
-        event_data = self.get_event_data(
+        return self._build_scipp_events(
+            sc=sc,
             variables=variables,
             component_name=component_name,
             filter_zeros=filter_zeros,
+            extra_variables=extra_variables,
+            source_name=source_name,
+            sample_name=sample_name,
+            chunk_size=chunk_size,
+            simple=True,
         )
-
-        # Retrieve coordinates corresponding to id's
-        global_coordinates = self.get_id_to_global_coordinates(
-            component_name=component_name
-        )
-        global_pos = global_coordinates[event_data["id"].astype(int), :]
-
-        source_pos = self.get_global_component_coordinates(source_name)
-        sample_pos = self.get_global_component_coordinates(sample_name)
-
-        events = sc.DataArray(
-            data=sc.array(
-                dims=['events'], unit=sc.units.counts, values=event_data["p"]
-            ),
-            coords={
-                'position': sc.vectors(dims=['events'], values=global_pos, unit='m'),
-                't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
-                'source_position': sc.vector(source_pos, unit='m'),
-                'sample_position': sc.vector(sample_pos, unit='m'),
-            },
-        )
-        for transfer in extra_variables:
-            events.coords[transfer.scipp_coord] = sc.array(
-                dims=['events'],
-                unit=transfer.unit,
-                values=event_data[transfer.mcstas_variable],
-            )
-
-        return events
 
     def export_scipp(
         self,
@@ -552,6 +649,8 @@ class Data:
         component_name=None,
         filter_zeros=True,
         extra_variables=None,
+        *,
+        chunk_size=None,
     ):
         """
         Provides scipp DataGroup with pixel information
@@ -573,42 +672,22 @@ class Data:
                 "Scipp installation required to export to Scipp format"
             ) from e
 
-        # todo: Make as generator to work in chunks
-
         # Default is to gather weight, time and id
         variables = ["p", "t", "id"]
         extra_variables = _prepare_extra_variables(extra_variables)
         variables += [transfer.mcstas_variable for transfer in extra_variables]
 
-        event_data = self.get_event_data(
+        events = self._build_scipp_events(
+            sc=sc,
             variables=variables,
             component_name=component_name,
             filter_zeros=filter_zeros,
+            extra_variables=extra_variables,
+            source_name=source_name,
+            sample_name=sample_name,
+            chunk_size=chunk_size,
+            simple=False,
         )
-        # Prepare events data
-        source_pos = self.get_global_component_coordinates(source_name)
-        sample_pos = self.get_global_component_coordinates(sample_name)
-
-        events = sc.DataArray(
-            data=sc.array(
-                dims=['events'], unit=sc.units.counts, values=event_data["p"]
-            ),
-            coords={
-                'pixel_id': sc.array(
-                    dims=['events'], values=event_data["id"].astype(int)
-                ),
-                't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
-                'source_position': sc.vector(source_pos, unit='m'),
-                'sample_position': sc.vector(sample_pos, unit='m'),
-            },
-        )
-        for transfer in extra_variables:
-            events.coords[transfer.scipp_coord] = sc.array(
-                dims=['events'],
-                unit=transfer.unit,
-                values=event_data[transfer.mcstas_variable],
-            )
-
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(
             component_name=component_name
