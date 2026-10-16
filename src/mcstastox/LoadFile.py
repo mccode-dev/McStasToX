@@ -7,6 +7,17 @@ import h5py
 import numpy as np
 
 from .ReadNeXus import McStasNeXus, _validate_chunk_size
+from .Sampling import SamplingSettings, sample_event_chunks
+
+_DEFAULT_SAMPLING_CHUNK_SIZE = 100_000
+
+
+def _get_sampling_weight_key(sampling) -> str:
+    if sampling is None:
+        return "p"
+    if not isinstance(sampling, SamplingSettings):
+        raise TypeError("sampling must be a SamplingSettings instance")
+    return sampling.weight_key
 
 
 class Transfer:
@@ -173,18 +184,20 @@ class Data:
         """
         return self.file_object.get_component_variables(component_name)
 
-    def _iter_event_chunks(self, variables, component_name, chunk_size, filter_zeros):
+    def _iter_event_chunks(
+        self, variables, component_name, chunk_size, filter_zeros, weight_key="p"
+    ):
         """Yield filtered event data without assembling the complete event set."""
         _validate_chunk_size(chunk_size)
         for event_data in self.file_object.iter_event_data(
             variables, component_name=component_name, chunk_size=chunk_size
         ):
-            if "p" in variables and filter_zeros:
-                nonzero = event_data["p"] != 0
+            if weight_key in variables and filter_zeros:
+                nonzero = event_data[weight_key] != 0
                 event_data = {
                     key: values[nonzero] for key, values in event_data.items()
                 }
-                if len(event_data["p"]) == 0:
+                if len(event_data[weight_key]) == 0:
                     continue
             yield event_data
 
@@ -501,6 +514,7 @@ class Data:
         sample_pos,
         extra_variables,
         simple,
+        weight_key="p",
     ):
         global_pos = global_coordinates[event_data["id"].astype(int), :]
         if simple:
@@ -522,7 +536,7 @@ class Data:
         )
         events = sc.DataArray(
             data=sc.array(
-                dims=["events"], unit=sc.units.counts, values=event_data["p"]
+                dims=["events"], unit=sc.units.counts, values=event_data[weight_key]
             ),
             coords=coords,
         )
@@ -545,12 +559,48 @@ class Data:
         sample_name,
         chunk_size,
         simple,
+        sampling,
     ):
+        _validate_chunk_size(chunk_size)
+        weight_key = _get_sampling_weight_key(sampling)
         global_coordinates = self.get_id_to_global_coordinates(
             component_name=component_name
         )
         source_pos = self.get_global_component_coordinates(source_name)
         sample_pos = self.get_global_component_coordinates(sample_name)
+
+        if sampling is not None:
+            sampling_chunk_size = chunk_size or _DEFAULT_SAMPLING_CHUNK_SIZE
+            sampled_event_data = sample_event_chunks(
+                self._iter_event_chunks(
+                    variables,
+                    component_name,
+                    sampling_chunk_size,
+                    filter_zeros,
+                    weight_key,
+                ),
+                sampling,
+            )
+            event_data = sampled_event_data
+            if not event_data:
+                event_data = {variable: np.empty(0) for variable in variables}
+            events = self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+                weight_key,
+            )
+            if sampled_event_data.effective_duration is not None:
+                events.coords["effective_duration"] = sc.scalar(
+                    sampled_event_data.effective_duration,
+                    variance=sampled_event_data.effective_duration_variance,
+                    unit="s",
+                )
+            return events
 
         if chunk_size is None:
             event_data = self.get_event_data(
@@ -566,6 +616,7 @@ class Data:
                 sample_pos,
                 extra_variables,
                 simple,
+                weight_key,
             )
 
         event_arrays = [
@@ -577,6 +628,7 @@ class Data:
                 sample_pos,
                 extra_variables,
                 simple,
+                weight_key,
             )
             for event_data in self._iter_event_chunks(
                 variables, component_name, chunk_size, filter_zeros
@@ -592,6 +644,7 @@ class Data:
                 sample_pos,
                 extra_variables,
                 simple,
+                weight_key,
             )
         return sc.concat(event_arrays, "events")
 
@@ -604,6 +657,7 @@ class Data:
         extra_variables=None,
         *,
         chunk_size=None,
+        sampling=None,
     ):
         """
         Provides simple scipp object that is easy to work with but takes more space
@@ -616,6 +670,10 @@ class Data:
         :param extra_variables: A Transfer or list of Transfers with
                                 additional event data to include as
                                 scipp coordinates
+        :param chunk_size: optional positive number of events to read at a time
+        :param sampling: optional SamplingSettings for converting weighted
+                         events to sampled unit-weight events. Set its
+                         ``weight_key`` when weights are not stored as ``p``.
         :return: scipp object
         """
         try:
@@ -626,7 +684,8 @@ class Data:
             ) from e
 
         # Default is to gather weight, time and id
-        variables = ["p", "t", "id"]
+        weight_key = _get_sampling_weight_key(sampling)
+        variables = [weight_key, "t", "id"]
         extra_variables = _prepare_extra_variables(extra_variables)
         variables += [transfer.mcstas_variable for transfer in extra_variables]
 
@@ -640,6 +699,7 @@ class Data:
             sample_name=sample_name,
             chunk_size=chunk_size,
             simple=True,
+            sampling=sampling,
         )
 
     def export_scipp(
@@ -651,6 +711,7 @@ class Data:
         extra_variables=None,
         *,
         chunk_size=None,
+        sampling=None,
     ):
         """
         Provides scipp DataGroup with pixel information
@@ -663,6 +724,10 @@ class Data:
         :param extra_variables: A Transfer or list of Transfers with
                                 additional event data to include as
                                 scipp coordinates
+        :param chunk_size: optional positive number of events to read at a time
+        :param sampling: optional SamplingSettings for converting weighted
+                         events to sampled unit-weight events. Set its
+                         ``weight_key`` when weights are not stored as ``p``.
         :return: scipp DataGroup with events, positions, bank_ids and bank_names
         """
         try:
@@ -673,7 +738,8 @@ class Data:
             ) from e
 
         # Default is to gather weight, time and id
-        variables = ["p", "t", "id"]
+        weight_key = _get_sampling_weight_key(sampling)
+        variables = [weight_key, "t", "id"]
         extra_variables = _prepare_extra_variables(extra_variables)
         variables += [transfer.mcstas_variable for transfer in extra_variables]
 
@@ -687,6 +753,7 @@ class Data:
             sample_name=sample_name,
             chunk_size=chunk_size,
             simple=False,
+            sampling=sampling,
         )
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(

@@ -13,3 +13,4 @@ del importlib
 
 from .LoadFile import Data as Read
 from .LoadFile import Transfer
+from .Sampling import SampledEventData, SamplingSettings, sample_event_chunks
