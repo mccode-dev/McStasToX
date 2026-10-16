@@ -12,7 +12,7 @@ For bug reports and other problems, please open an [issue](https://github.com/mc
 You are welcome to submit pull requests at any time.
 But to avoid having to make large modifications during review or even have your PR rejected, please first open an issue first to discuss your idea!
 
-Check out the subsections of the [Developer documentation](https://mccode-dev.github.io/mcstastox/developer/index.html) for details on how McStasToX is developed.
+Check out the subsections of the [Developer documentation](https://mccode-dev.github.io/McStasToX/developer/index.html) for details on how McStasToX is developed.
 
 ## Code of conduct
 
