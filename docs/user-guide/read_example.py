@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt
 import mcstasscript as ms
 
@@ -5,7 +7,7 @@ import mcstasscript as ms
 def make_instrument(
     square=True, banana=True, id_overlap=False, id_gap=False, non_zero_id_start=False
 ):
-    instr = ms.McStas_instr("test")
+    instr = ms.McStas_instr(f"test_{os.getpid()}")
     source = instr.add_component("source", "Source_simple")
     source.set_parameters(
         xwidth=0.01,

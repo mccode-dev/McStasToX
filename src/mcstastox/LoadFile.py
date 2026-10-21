@@ -6,14 +6,74 @@ import os
 import h5py
 import numpy as np
 
-from .ReadNeXus import McStasNeXus
+from .ReadNeXus import McStasNeXus, _validate_chunk_size
+from .Sampling import SamplingSettings, sample_event_chunks
+
+_DEFAULT_SAMPLING_CHUNK_SIZE = 100_000
+
+
+def _get_sampling_weight_key(sampling) -> str:
+    if sampling is None:
+        return "p"
+    if not isinstance(sampling, SamplingSettings):
+        raise TypeError("sampling must be a SamplingSettings instance")
+    return sampling.weight_key
 
 
 class Transfer:
-    def __init__(self, mcstas_variable, scipp_coord, unit=None):
+    """
+    Additional event variable to load and export as a scipp coordinate
+
+    :param mcstas_variable: Name of the variable in the McStas event data,
+                            see ``Data.get_component_variables``
+    :param scipp_coord: Name of the scipp coordinate to create
+    :param unit: Unit of the variable as a scipp unit string, e.g. ``"s"``
+    """
+
+    def __init__(self, mcstas_variable: str, scipp_coord: str, unit: str | None = None):
+        for name, value in (
+            ("mcstas_variable", mcstas_variable),
+            ("scipp_coord", scipp_coord),
+        ):
+            if not isinstance(value, str):
+                raise TypeError(f"Transfer {name} must be a string.")
+            if not value:
+                raise ValueError(f"Transfer {name} must not be empty.")
+        if unit is not None:
+            if not isinstance(unit, str):
+                raise TypeError("Transfer unit must be a string or None.")
+            if not unit:
+                raise ValueError("Transfer unit must not be empty.")
         self.mcstas_variable = mcstas_variable
         self.scipp_coord = scipp_coord
         self.unit = unit
+
+    def __repr__(self) -> str:
+        return (
+            f"Transfer(mcstas_variable={self.mcstas_variable!r}, "
+            f"scipp_coord={self.scipp_coord!r}, unit={self.unit!r})"
+        )
+
+
+def _prepare_extra_variables(extra_variables) -> list[Transfer]:
+    """
+    Normalizes extra_variables to a list of Transfer instances
+
+    :param extra_variables: None, a single Transfer or a list of Transfers
+    :return: list of Transfers, empty if None was given
+    """
+    if extra_variables is None:
+        return []
+    if isinstance(extra_variables, Transfer):
+        return [extra_variables]
+    if not isinstance(extra_variables, list) or any(
+        not isinstance(transfer, Transfer) for transfer in extra_variables
+    ):
+        raise TypeError(
+            "extra_variables must be a Transfer or a list of Transfers, "
+            f"got {type(extra_variables).__name__}."
+        )
+    return extra_variables
 
 
 class Data:
@@ -139,6 +199,23 @@ class Data:
         :return: list of available variables for given component name with event data
         """
         return self.file_object.get_component_variables(component_name)
+
+    def _iter_event_chunks(
+        self, variables, component_name, chunk_size, filter_zeros, weight_key="p"
+    ):
+        """Yield filtered event data without assembling the complete event set."""
+        _validate_chunk_size(chunk_size)
+        for event_data in self.file_object.iter_event_data(
+            variables, component_name=component_name, chunk_size=chunk_size
+        ):
+            if weight_key in variables and filter_zeros:
+                nonzero = event_data[weight_key] != 0
+                event_data = {
+                    key: values[nonzero] for key, values in event_data.items()
+                }
+                if len(event_data[weight_key]) == 0:
+                    continue
+            yield event_data
 
     def get_event_data(self, variables, component_name=None, filter_zeros=True):
         """
@@ -444,6 +521,149 @@ class Data:
         """
         return self.get_id_to_coordinate(local=True, component_name=component_name)
 
+    def _event_data_to_scipp(
+        self,
+        sc,
+        event_data,
+        global_coordinates,
+        source_pos,
+        sample_pos,
+        extra_variables,
+        simple,
+        weight_key="p",
+    ):
+        global_pos = global_coordinates[event_data["id"].astype(int), :]
+        if simple:
+            coords = {
+                "position": sc.vectors(dims=["events"], values=global_pos, unit="m"),
+            }
+        else:
+            coords = {
+                "pixel_id": sc.array(
+                    dims=["events"], values=event_data["id"].astype(int)
+                ),
+            }
+        coords.update(
+            {
+                "t": sc.array(dims=["events"], unit="s", values=event_data["t"]),
+                "source_position": sc.vector(source_pos, unit="m"),
+                "sample_position": sc.vector(sample_pos, unit="m"),
+            }
+        )
+        events = sc.DataArray(
+            data=sc.array(
+                dims=["events"], unit=sc.units.counts, values=event_data[weight_key]
+            ),
+            coords=coords,
+        )
+        for transfer in extra_variables:
+            events.coords[transfer.scipp_coord] = sc.array(
+                dims=["events"],
+                unit=transfer.unit,
+                values=event_data[transfer.mcstas_variable],
+            )
+        return events
+
+    def _build_scipp_events(
+        self,
+        sc,
+        variables,
+        component_name,
+        filter_zeros,
+        extra_variables,
+        source_name,
+        sample_name,
+        chunk_size,
+        simple,
+        sampling,
+    ):
+        _validate_chunk_size(chunk_size)
+        weight_key = _get_sampling_weight_key(sampling)
+        global_coordinates = self.get_id_to_global_coordinates(
+            component_name=component_name
+        )
+        source_pos = self.get_global_component_coordinates(source_name)
+        sample_pos = self.get_global_component_coordinates(sample_name)
+
+        if sampling is not None:
+            sampling_chunk_size = chunk_size or _DEFAULT_SAMPLING_CHUNK_SIZE
+            sampled_event_data = sample_event_chunks(
+                self._iter_event_chunks(
+                    variables,
+                    component_name,
+                    sampling_chunk_size,
+                    filter_zeros,
+                    weight_key,
+                ),
+                sampling,
+            )
+            event_data = sampled_event_data
+            if not event_data:
+                event_data = {variable: np.empty(0) for variable in variables}
+            events = self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+                weight_key,
+            )
+            if sampled_event_data.effective_duration is not None:
+                events.coords["effective_duration"] = sc.scalar(
+                    sampled_event_data.effective_duration,
+                    variance=sampled_event_data.effective_duration_variance,
+                    unit="s",
+                )
+            return events
+
+        if chunk_size is None:
+            event_data = self.get_event_data(
+                variables=variables,
+                component_name=component_name,
+                filter_zeros=filter_zeros,
+            )
+            return self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+                weight_key,
+            )
+
+        event_arrays = [
+            self._event_data_to_scipp(
+                sc,
+                event_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+                weight_key,
+            )
+            for event_data in self._iter_event_chunks(
+                variables, component_name, chunk_size, filter_zeros
+            )
+        ]
+        if not event_arrays:
+            empty_data = {variable: np.empty(0) for variable in variables}
+            return self._event_data_to_scipp(
+                sc,
+                empty_data,
+                global_coordinates,
+                source_pos,
+                sample_pos,
+                extra_variables,
+                simple,
+                weight_key,
+            )
+        return sc.concat(event_arrays, "events")
+
     def export_scipp_simple(
         self,
         source_name,
@@ -451,6 +671,9 @@ class Data:
         component_name=None,
         filter_zeros=True,
         extra_variables=None,
+        *,
+        chunk_size=None,
+        sampling=None,
     ):
         """
         Provides simple scipp object that is easy to work with but takes more space
@@ -460,8 +683,13 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include
-                                (not yet functional)
+        :param extra_variables: A Transfer or list of Transfers with
+                                additional event data to include as
+                                scipp coordinates
+        :param chunk_size: optional positive number of events to read at a time
+        :param sampling: optional SamplingSettings for converting weighted
+                         events to sampled unit-weight events. Set its
+                         ``weight_key`` when weights are not stored as ``p``.
         :return: scipp object
         """
         try:
@@ -471,43 +699,24 @@ class Data:
                 "Scipp installation required to export to Scipp format"
             ) from e
 
-        variables = ["p", "t", "id"]
+        # Default is to gather weight, time and id
+        weight_key = _get_sampling_weight_key(sampling)
+        variables = [weight_key, "t", "id"]
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
-        # Starting to implement adding additional variables, but not yet done.
-        if extra_variables is not None:
-            if not isinstance(extra_variables, list):
-                extra_variables = [extra_variables]
-            # Default is to gather weight, time and id
-            variables += extra_variables
-
-        event_data = self.get_event_data(
+        return self._build_scipp_events(
+            sc=sc,
             variables=variables,
             component_name=component_name,
             filter_zeros=filter_zeros,
+            extra_variables=extra_variables,
+            source_name=source_name,
+            sample_name=sample_name,
+            chunk_size=chunk_size,
+            simple=True,
+            sampling=sampling,
         )
-
-        # Retrieve coordinates corresponding to id's
-        global_coordinates = self.get_id_to_global_coordinates(
-            component_name=component_name
-        )
-        global_pos = global_coordinates[event_data["id"].astype(int), :]
-
-        source_pos = self.get_global_component_coordinates(source_name)
-        sample_pos = self.get_global_component_coordinates(sample_name)
-
-        events = sc.DataArray(
-            data=sc.array(
-                dims=['events'], unit=sc.units.counts, values=event_data["p"]
-            ),
-            coords={
-                'position': sc.vectors(dims=['events'], values=global_pos, unit='m'),
-                't': sc.array(dims=['events'], unit='s', values=event_data["t"]),
-                'source_position': sc.vector(source_pos, unit='m'),
-                'sample_position': sc.vector(sample_pos, unit='m'),
-            },
-        )
-
-        return events
 
     def export_scipp(
         self,
@@ -516,6 +725,9 @@ class Data:
         component_name=None,
         filter_zeros=True,
         extra_variables=None,
+        *,
+        chunk_size=None,
+        sampling=None,
     ):
         """
         Provides scipp DataGroup with pixel information
@@ -525,8 +737,13 @@ class Data:
         :param component_name: Name of component with data
                                (if None all is loaded, can also be list)
         :param filter_zeros: If True events with zero weight are filtered out
-        :param extra_variables: List of extra variables to load and include
-                                (not yet functional)
+        :param extra_variables: A Transfer or list of Transfers with
+                                additional event data to include as
+                                scipp coordinates
+        :param chunk_size: optional positive number of events to read at a time
+        :param sampling: optional SamplingSettings for converting weighted
+                         events to sampled unit-weight events. Set its
+                         ``weight_key`` when weights are not stored as ``p``.
         :return: scipp DataGroup with events, positions, bank_ids and bank_names
         """
         try:
@@ -536,55 +753,24 @@ class Data:
                 "Scipp installation required to export to Scipp format"
             ) from e
 
-        # todo: Make as generator to work in chunks
+        # Default is to gather weight, time and id
+        weight_key = _get_sampling_weight_key(sampling)
+        variables = [weight_key, "t", "id"]
+        extra_variables = _prepare_extra_variables(extra_variables)
+        variables += [transfer.mcstas_variable for transfer in extra_variables]
 
-        base_variables = ["p", "id"]  # requires special care
-        variables = [
-            Transfer(mcstas_variable="t", scipp_coord="t", unit="s"),
-        ]
-
-        if extra_variables is not None:
-            if not isinstance(extra_variables, list):
-                extra_variables = [extra_variables]
-            # Default is to gather weight, time and id
-            variables += extra_variables
-
-        load_variables = base_variables
-        for transfer in variables:
-            if not isinstance(transfer, Transfer):
-                raise TypeError("Use Transfer class to add extra variables.")
-
-            load_variables.append(transfer.mcstas_variable)
-
-        event_data = self.get_event_data(
-            variables=load_variables,
+        events = self._build_scipp_events(
+            sc=sc,
+            variables=variables,
             component_name=component_name,
             filter_zeros=filter_zeros,
+            extra_variables=extra_variables,
+            source_name=source_name,
+            sample_name=sample_name,
+            chunk_size=chunk_size,
+            simple=False,
+            sampling=sampling,
         )
-        # Prepare events data
-        source_pos = self.get_global_component_coordinates(source_name)
-        sample_pos = self.get_global_component_coordinates(sample_name)
-
-        events = sc.DataArray(
-            data=sc.array(
-                dims=['events'], unit=sc.units.counts, values=event_data["p"]
-            ),
-            coords={
-                'pixel_id': sc.array(
-                    dims=['events'], values=event_data["id"].astype(int)
-                ),
-                #'t': sc.array(dims=['events'], unit='s', values=event_data["t"]),
-                'source_position': sc.vector(source_pos, unit='m'),
-                'sample_position': sc.vector(sample_pos, unit='m'),
-            },
-        )
-        for transfer in variables:
-            events.coords[transfer.scipp_coord] = sc.array(
-                dims=["events"],
-                unit=transfer.unit,
-                values=event_data[transfer.mcstas_variable],
-            )
-
         # Retrieve coordinates corresponding to id's
         global_coordinates = self.get_id_to_global_coordinates(
             component_name=component_name
