@@ -81,12 +81,16 @@ class Data:
     Interface class, with context handler, loads data using McStasNeXus data class
     """
 
-    def __init__(self, data_folder, filename="mccode.h5"):
+    def __init__(self, data_folder, filename="mccode.h5", *, entry_number=1):
         # Open the file and store the file object as an instance attribute
         self.file = h5py.File(
             os.path.join(data_folder, filename), "r", swmr=True
         )  # swmr allows multiple readers
-        self.file_object = McStasNeXus(self.file)
+        try:
+            self.file_object = McStasNeXus(self.file, entry_number=entry_number)
+        except Exception:
+            self.file.close()
+            raise
 
         # Prepare data structure for when data is requested
         # List for component names in sequence of lowest to highest pixel ID
@@ -114,6 +118,18 @@ class Data:
         :return: list of component names
         """
         return list(self.file_object.component_names)
+
+    def get_number_of_entries(self):
+        """
+        :return: number of scan entries in the file
+        """
+        return self.file_object.get_number_of_entries()
+
+    def get_instrument_parameters(self):
+        """
+        :return: instrument parameters for the selected entry as a dictionary
+        """
+        return self.file_object.get_instrument_parameters()
 
     def get_components_with_data(self):
         """

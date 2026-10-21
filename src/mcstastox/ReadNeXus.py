@@ -8,6 +8,8 @@ from typing import cast
 import h5py
 import numpy as np
 
+_ENTRY_NAME_PATTERN = re.compile(r"entry(\d+)$")
+
 
 def _validate_chunk_size(chunk_size: int | None, *, allow_none: bool = True) -> None:
     if chunk_size is None:
@@ -56,32 +58,60 @@ def _get_mcstas_version_settings(
     raise ValueError(f"McStas version {version} not supported by this tool.")
 
 
-def _validate_file(file_handle: h5py.File) -> None:
-    # Check file is formatted as expected
-    if "entry1" not in list(file_handle.keys()):
-        raise ValueError("h5 file not formatted as expected, lacks 'entry1'.")
+def _get_entry_names(file_handle: h5py.File) -> list[str]:
+    return sorted(
+        (name for name in file_handle if _ENTRY_NAME_PATTERN.fullmatch(name)),
+        key=lambda name: int(name[5:]),
+    )
 
-    entry_obj = cast(h5py.Group, file_handle["entry1"])
+
+def _decode_parameter_value(value):
+    if isinstance(value, np.ndarray):
+        if value.size == 1:
+            value = value.reshape(-1)[0]
+        else:
+            return [_decode_parameter_value(item) for item in value]
+
+    if isinstance(value, (bytes, np.bytes_)):
+        value = bytes(value).decode("utf-8")
+    elif isinstance(value, np.generic):
+        value = value.item()
+
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
+    return value
+
+
+def _validate_file(file_handle: h5py.File, entry_name: str = "entry1") -> None:
+    # Check file is formatted as expected
+    if entry_name not in file_handle:
+        raise ValueError(f"h5 file not formatted as expected, lacks '{entry_name}'.")
+
+    entry_obj = cast(h5py.Group, file_handle[entry_name])
     entry_keys = tuple(entry_obj.keys())
 
     mandatory_entry_keys = ("data", "simulation", "instrument")
     missing_keys = tuple(key for key in mandatory_entry_keys if key not in entry_keys)
     if any(missing_keys):
         raise ValueError(
-            "'entry1' not formatted as expected, lacks keys: "
+            f"'{entry_name}' not formatted as expected, lacks keys: "
             f"[{', '.join(missing_keys)}]."
         ) from None
 
     simluation_keys = tuple(entry_obj["simulation"].keys())
     if "Param" not in simluation_keys:
         raise ValueError(
-            "'entry1/simulation' not formatted as expected, lacks 'Param'."
+            f"'{entry_name}/simulation' not formatted as expected, lacks 'Param'."
         )
 
     instrument_keys = tuple(entry_obj["instrument"].keys())
     if "components" not in instrument_keys:
         raise ValueError(
-            "'entry1/instrument' not formatted as expected, lacks 'components'."
+            f"'{entry_name}/instrument' not formatted as expected, lacks 'components'."
         )
 
 
@@ -95,12 +125,20 @@ class McStasNeXus:
         self,
         file_handle,
         *,
+        entry_number: int = 1,
         mcstas_version: tuple[int, int, int] | None = None,
         mcstas_setting_registry: _McStasVersionSettingTp = _MCSTAS_VERSION_SETTINGS,
     ):
         self.file_handle = file_handle
+        if not isinstance(entry_number, int) or isinstance(entry_number, bool):
+            raise TypeError("entry_number must be an integer.")
+        if entry_number < 1:
+            raise ValueError("entry_number must be greater than or equal to 1.")
+
+        self.entry_number = entry_number
+        self.entry_name = f"entry{entry_number}"
         # Check file is formatted as expected
-        _validate_file(self.file_handle)
+        _validate_file(self.file_handle, self.entry_name)
         self.mcstas_version = mcstas_version or self._read_mcstas_version()
 
         # Load settings appropriate for this McStas version
@@ -113,15 +151,33 @@ class McStasNeXus:
         self.component_path_names: dict
         self._read_component_name_and_path()
 
+    def get_number_of_entries(self) -> int:
+        """
+        :return: number of scan entries in the file
+        """
+        return len(_get_entry_names(self.file_handle))
+
+    def get_instrument_parameters(self):
+        """
+        :return: instrument parameters for the selected entry as a dictionary
+        """
+        parameter_entry = self.file_handle[self.entry_name]["simulation"]["Param"]
+        return {
+            parameter_name: _decode_parameter_value(parameter_entry[parameter_name][()])
+            for parameter_name in parameter_entry
+        }
+
     def _read_component_name_and_path(self) -> None:
         if self.settings.component_numbers is None:
             self.component_names = list(
-                self.file_handle["entry1"]["instrument"]["components"].keys()
+                self.file_handle[self.entry_name]["instrument"]["components"].keys()
             )
             self.component_path_names = {name: name for name in self.component_names}
         else:
             comp_name_start_index = self.settings.component_numbers + 1
-            components = self.file_handle["entry1"]["instrument"]["components"].keys()
+            components = self.file_handle[self.entry_name]["instrument"][
+                "components"
+            ].keys()
             component_paths = list(components)
             self.component_names = [
                 name[comp_name_start_index:] for name in component_paths
@@ -132,13 +188,15 @@ class McStasNeXus:
 
     def _read_mcstas_version(self) -> tuple[int, int, int]:
         f = self.file_handle
-        if "program" not in list(f["entry1"]["simulation"].attrs):
+        if "program" not in list(f[self.entry_name]["simulation"].attrs):
             raise ValueError(
                 "h5 file not formatted as expected, "
-                "lacks 'program' attribute in 'entry1/simulation/program'"
+                f"lacks 'program' attribute in '{self.entry_name}/simulation/program'"
             )
 
-        version_string = f["entry1"]["simulation"].attrs["program"].decode("utf-8")
+        version_string = (
+            f[self.entry_name]["simulation"].attrs["program"].decode("utf-8")
+        )
 
         match = re.search(r'(\d+)\.(\d+)\.(\d+)', version_string)
         if match:
@@ -207,7 +265,9 @@ class McStasNeXus:
             )
 
         component_name = self.component_path_names[component_name]
-        return self.file_handle["entry1"]["instrument"]["components"][component_name]
+        return self.file_handle[self.entry_name]["instrument"]["components"][
+            component_name
+        ]
 
     def get_geometry_entry(self, component_name):
         """
