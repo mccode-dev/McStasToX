@@ -56,32 +56,32 @@ def _get_mcstas_version_settings(
     raise ValueError(f"McStas version {version} not supported by this tool.")
 
 
-def _validate_file(file_handle: h5py.File) -> None:
+def _validate_file(file_handle: h5py.File, entry: str = "entry1") -> None:
     # Check file is formatted as expected
-    if "entry1" not in list(file_handle.keys()):
-        raise ValueError("h5 file not formatted as expected, lacks 'entry1'.")
+    if entry not in list(file_handle.keys()):
+        raise ValueError(f"h5 file not formatted as expected, lacks '{entry}'.")
 
-    entry_obj = cast(h5py.Group, file_handle["entry1"])
+    entry_obj = cast(h5py.Group, file_handle[entry])
     entry_keys = tuple(entry_obj.keys())
 
     mandatory_entry_keys = ("data", "simulation", "instrument")
     missing_keys = tuple(key for key in mandatory_entry_keys if key not in entry_keys)
     if any(missing_keys):
         raise ValueError(
-            "'entry1' not formatted as expected, lacks keys: "
+            f"'{entry}' not formatted as expected, lacks keys: "
             f"[{', '.join(missing_keys)}]."
         ) from None
 
     simluation_keys = tuple(entry_obj["simulation"].keys())
     if "Param" not in simluation_keys:
         raise ValueError(
-            "'entry1/simulation' not formatted as expected, lacks 'Param'."
+            f"'{entry}/simulation' not formatted as expected, lacks 'Param'."
         )
 
     instrument_keys = tuple(entry_obj["instrument"].keys())
     if "components" not in instrument_keys:
         raise ValueError(
-            "'entry1/instrument' not formatted as expected, lacks 'components'."
+            f"'{entry}/instrument' not formatted as expected, lacks 'components'."
         )
 
 
@@ -95,12 +95,15 @@ class McStasNeXus:
         self,
         file_handle,
         *,
+        entry: str = "entry1",
         mcstas_version: tuple[int, int, int] | None = None,
         mcstas_setting_registry: _McStasVersionSettingTp = _MCSTAS_VERSION_SETTINGS,
     ):
         self.file_handle = file_handle
+        # NXentry to read; a McStas NeXus scan writes one per step (entry1, entry2, ...)
+        self.entry = entry
         # Check file is formatted as expected
-        _validate_file(self.file_handle)
+        _validate_file(self.file_handle, entry)
         self.mcstas_version = mcstas_version or self._read_mcstas_version()
 
         # Load settings appropriate for this McStas version
@@ -116,12 +119,12 @@ class McStasNeXus:
     def _read_component_name_and_path(self) -> None:
         if self.settings.component_numbers is None:
             self.component_names = list(
-                self.file_handle["entry1"]["instrument"]["components"].keys()
+                self.file_handle[self.entry]["instrument"]["components"].keys()
             )
             self.component_path_names = {name: name for name in self.component_names}
         else:
             comp_name_start_index = self.settings.component_numbers + 1
-            components = self.file_handle["entry1"]["instrument"]["components"].keys()
+            components = self.file_handle[self.entry]["instrument"]["components"].keys()
             component_paths = list(components)
             self.component_names = [
                 name[comp_name_start_index:] for name in component_paths
@@ -132,13 +135,13 @@ class McStasNeXus:
 
     def _read_mcstas_version(self) -> tuple[int, int, int]:
         f = self.file_handle
-        if "program" not in list(f["entry1"]["simulation"].attrs):
+        if "program" not in list(f[self.entry]["simulation"].attrs):
             raise ValueError(
                 "h5 file not formatted as expected, "
-                "lacks 'program' attribute in 'entry1/simulation/program'"
+                f"lacks 'program' attribute in '{self.entry}/simulation/program'"
             )
 
-        version_string = f["entry1"]["simulation"].attrs["program"].decode("utf-8")
+        version_string = f[self.entry]["simulation"].attrs["program"].decode("utf-8")
 
         match = re.search(r'(\d+)\.(\d+)\.(\d+)', version_string)
         if match:
@@ -207,7 +210,7 @@ class McStasNeXus:
             )
 
         component_name = self.component_path_names[component_name]
-        return self.file_handle["entry1"]["instrument"]["components"][component_name]
+        return self.file_handle[self.entry]["instrument"]["components"][component_name]
 
     def get_geometry_entry(self, component_name):
         """
