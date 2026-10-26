@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Mccode-dev contributors (https://github.com/mccode-dev)
 import re
+import warnings
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import cast
@@ -144,12 +145,17 @@ class McStasNeXus:
         if match:
             return tuple(map(int, match.groups()))
 
-        # Can have other methods here for older / newer formats
-        # If not, raise error
-        raise ValueError(
-            f"Could not find version in file, found '{version_string}."
-            "Hardcode the version as an argument to the class."
+        # No version in the string (e.g. just "McStas"): assume the newest file
+        # layout, as written by current McStas and mccode-antlr, rather than
+        # refusing the file
+        newest = max(_MCSTAS_VERSION_SETTINGS)
+        warnings.warn(
+            f"No McStas version found in '{version_string}', assuming the file "
+            f"layout of McStas {'.'.join(map(str, newest))} or newer; pass "
+            "mcstas_version=(major, minor, patch) to override.",
+            stacklevel=2,
         )
+        return newest
 
     def get_components(self):
         """
